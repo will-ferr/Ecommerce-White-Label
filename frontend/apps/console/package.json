@@ -1,0 +1,14 @@
+{
+  "name": "@whitelabel/console",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5174",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@whitelabel/panel-shell": "^0.1.0",
+    "@whitelabel/ui": "^0.1.0"
+  }
+}

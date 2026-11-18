@@ -1,0 +1,71 @@
+/*
+ * Design tokens. Components only use the --wl-* variables, so a tenant theme can
+ * replace them at runtime without changing or duplicating any component.
+ */
+:root {
+  --wl-color-canvas: #f6f4ee;
+  --wl-color-surface: #fffefb;
+  --wl-color-ink: #18211f;
+  --wl-color-muted: #58635f;
+  --wl-color-line: #dcd8cc;
+  --wl-color-primary: #0d5f52;
+  --wl-color-primary-strong: #094a40;
+  --wl-color-on-primary: #ffffff;
+
+  --wl-color-success: #17603f;
+  --wl-color-success-soft: #dff1e6;
+  --wl-color-warning: #7a4d00;
+  --wl-color-warning-soft: #fbedc9;
+  --wl-color-danger: #a02a1e;
+  --wl-color-danger-soft: #fbe3df;
+
+  --wl-font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --wl-font-display: Georgia, 'Times New Roman', serif;
+  --wl-radius-control: 0.5rem;
+  --wl-radius-card: 0.875rem;
+}
+
+@theme inline {
+  --color-canvas: var(--wl-color-canvas);
+  --color-surface: var(--wl-color-surface);
+  --color-ink: var(--wl-color-ink);
+  --color-muted: var(--wl-color-muted);
+  --color-line: var(--wl-color-line);
+  --color-primary: var(--wl-color-primary);
+  --color-primary-strong: var(--wl-color-primary-strong);
+  --color-on-primary: var(--wl-color-on-primary);
+  --color-success: var(--wl-color-success);
+  --color-success-soft: var(--wl-color-success-soft);
+  --color-warning: var(--wl-color-warning);
+  --color-warning-soft: var(--wl-color-warning-soft);
+  --color-danger: var(--wl-color-danger);
+  --color-danger-soft: var(--wl-color-danger-soft);
+  --font-sans: var(--wl-font-sans);
+  --font-display: var(--wl-font-display);
+  --radius-control: var(--wl-radius-control);
+  --radius-card: var(--wl-radius-card);
+}
+
+@layer base {
+  html {
+    background-color: var(--wl-color-canvas);
+    color: var(--wl-color-ink);
+    font-family: var(--wl-font-sans);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--wl-color-primary);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
