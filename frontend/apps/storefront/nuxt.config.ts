@@ -6,12 +6,12 @@ export default defineNuxtConfig({
   css: ['~/assets/main.css'],
   devtools: { enabled: false },
   telemetry: false,
-  build: { transpile: ['@whitelabel/ui', '@whitelabel/api-client'] },
+  build: { transpile: ['@whitelabel/ui', '@whitelabel/api-client', '@whitelabel/theme'] },
   vite: { plugins: [tailwindcss()] },
   app: {
     head: {
       htmlAttrs: { lang: 'pt-BR' },
-      link: [{ rel: 'icon', href: 'data:,' }],
+      link: [{ key: 'icon', rel: 'icon', href: 'data:,' }],
     },
   },
   runtimeConfig: {

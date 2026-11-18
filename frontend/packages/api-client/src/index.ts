@@ -4,6 +4,8 @@ export type SystemStatus = components['schemas']['SystemStatus']
 export type SystemState = components['schemas']['SystemState']
 export type Problem = components['schemas']['Problem']
 export type FieldError = components['schemas']['FieldError']
+export type StorefrontConfig = components['schemas']['StorefrontConfig']
+export type ThemeTokens = components['schemas']['ThemeTokens']
 
 export const NETWORK_ERROR = 'NETWORK_ERROR'
 export const UNEXPECTED_RESPONSE = 'UNEXPECTED_RESPONSE'
@@ -85,6 +87,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
   return {
     getStatus: (signal?: AbortSignal) =>
       request<SystemStatus>('/api/v1/status', { signal, acceptedStatuses: [503] }),
+    getStorefrontConfig: (signal?: AbortSignal) => request<StorefrontConfig>('/api/v1/storefront/config', { signal }),
   }
 }
 

@@ -6,7 +6,7 @@ import { useErrorStore } from './errors'
 import { useSystemStore } from './system'
 
 function clientWith(getStatus: ApiClient['getStatus']): ApiClient {
-  return { getStatus }
+  return { getStatus, getStorefrontConfig: () => Promise.reject(new Error('not used')) }
 }
 
 beforeEach(() => setActivePinia(createPinia()))

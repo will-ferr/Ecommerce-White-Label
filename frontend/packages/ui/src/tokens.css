@@ -23,6 +23,7 @@
   --wl-font-display: Georgia, 'Times New Roman', serif;
   --wl-radius-control: 0.5rem;
   --wl-radius-card: 0.875rem;
+  --wl-space-section: 3rem;
 }
 
 @theme inline {

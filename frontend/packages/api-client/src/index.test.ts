@@ -10,6 +10,22 @@ function clientReturning(response: Response) {
   return createApiClient({ fetch: vi.fn().mockResolvedValue(response) })
 }
 
+describe('getStorefrontConfig', () => {
+  it('returns the configuration of the store', async () => {
+    const fetcher = vi.fn().mockResolvedValue(json({ slug: 'aurora' }))
+    const client = createApiClient({ baseUrl: 'http://api:8080', fetch: fetcher })
+
+    await expect(client.getStorefrontConfig()).resolves.toMatchObject({ slug: 'aurora' })
+    expect(fetcher.mock.calls[0]?.[0]).toBe('http://api:8080/api/v1/storefront/config')
+  })
+
+  it('reports a store that does not exist', async () => {
+    const client = clientReturning(json({ title: 'Not Found', status: 404, code: 'STORE_NOT_FOUND' }, 404))
+
+    await expect(client.getStorefrontConfig()).rejects.toMatchObject({ status: 404, code: 'STORE_NOT_FOUND' })
+  })
+})
+
 describe('getStatus', () => {
   it('returns the platform status', async () => {
     const fetcher = vi.fn().mockResolvedValue(json({ status: 'ok', version: '1.0.0' }))

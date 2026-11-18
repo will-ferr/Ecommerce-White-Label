@@ -21,6 +21,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/storefront/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consulta a configuração pública da loja do domínio acessado
+         * @description A loja é identificada somente pelo domínio da requisição.
+         */
+        get: operations["getStorefrontConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -69,6 +89,61 @@ export interface components {
             status: components["schemas"]["SystemState"];
             checks: {
                 [key: string]: "up" | "down";
+            };
+        };
+        StorefrontConfig: {
+            slug: string;
+            store: {
+                name: string;
+                currency: string;
+                locale: string;
+                timezone: string;
+            };
+            seo: {
+                title: string;
+                description: string;
+                indexable: boolean;
+            };
+            theme: {
+                version: number;
+                tokens: components["schemas"]["ThemeTokens"];
+            };
+            features: {
+                [key: string]: boolean;
+            };
+        };
+        /** @enum {string} */
+        FontFamily: "system" | "humanist" | "geometric" | "serif" | "slab";
+        ThemeTokens: {
+            colors: {
+                canvas: string;
+                surface: string;
+                ink: string;
+                muted: string;
+                line: string;
+                primary: string;
+                primaryStrong: string;
+                onPrimary: string;
+            };
+            typography: {
+                body: components["schemas"]["FontFamily"];
+                display: components["schemas"]["FontFamily"];
+            };
+            shape: {
+                /** @enum {string} */
+                radius: "none" | "small" | "medium" | "large";
+            };
+            spacing: {
+                /** @enum {string} */
+                density: "compact" | "comfortable" | "spacious";
+            };
+            layout: {
+                /** @enum {string} */
+                header: "classic" | "centered";
+            };
+            assets: {
+                logoUrl: string;
+                faviconUrl: string;
             };
         };
         FieldError: {
@@ -125,6 +200,53 @@ export interface operations {
             };
             /** @description Erro inesperado */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getStorefrontConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configuração da loja */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorefrontConfig"];
+                };
+            };
+            /** @description Loja suspensa (STORE_UNAVAILABLE) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Nenhuma loja configurada para o domínio (STORE_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Não foi possível identificar a loja no momento */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
