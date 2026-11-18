@@ -1,0 +1,19 @@
+.PHONY: test test-integration test-race lint vuln build
+
+test:
+	go test ./...
+
+test-race:
+	go test -race ./...
+
+test-integration:
+	go test -tags integration -count=1 -timeout 5m ./tests/...
+
+lint:
+	golangci-lint run ./...
+
+vuln:
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+build:
+	go build -trimpath -o bin/ ./cmd/...
