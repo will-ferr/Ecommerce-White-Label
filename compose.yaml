@@ -72,7 +72,47 @@ services:
       MIGRATION_DB_USER: app_owner
       MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?copie .env.example para .env}
     depends_on:
+      db-bootstrap: { condition: service_completed_successfully }
+    restart: "no"
+
+  # Keeps database roles up to date, including on volumes created earlier.
+  db-bootstrap:
+    image: postgres:18.7-alpine
+    entrypoint: ["sh", "/bootstrap/01-roles.sh"]
+    environment:
+      PGHOST: postgres
+      PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?copie .env.example para .env}
+      POSTGRES_USER: postgres
+      POSTGRES_DB: ecommerce
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?copie .env.example para .env}
+      DB_PASSWORD: ${DB_PASSWORD:?copie .env.example para .env}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?copie .env.example para .env}
+    volumes:
+      - ./deployments/compose/postgres/init:/bootstrap:ro
+    depends_on:
       postgres: { condition: service_healthy }
+    restart: "no"
+
+  # Operator tool: docker compose run --rm tenantctl tenant list
+  tenantctl:
+    profiles: [tools]
+    build:
+      context: ./backend
+      args:
+        VERSION: 0.1.0-dev
+    entrypoint: ["/app/tenantctl"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      <<: *database-env
+      PLATFORM_DB_USER: app_platform
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?copie .env.example para .env}
+      PLATFORM_BASE_DOMAIN: ${PLATFORM_BASE_DOMAIN:-localhost}
+    volumes:
+      - ./deployments/compose/seed:/seed:ro
+    depends_on:
+      migrate: { condition: service_completed_successfully }
     restart: "no"
 
   storefront:
@@ -86,7 +126,7 @@ services:
     depends_on:
       api: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/healthz"]
       interval: 10s
       timeout: 3s
       retries: 6
@@ -125,6 +165,7 @@ services:
       POSTGRES_DB: ecommerce
       MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?copie .env.example para .env}
       DB_PASSWORD: ${DB_PASSWORD:?copie .env.example para .env}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?copie .env.example para .env}
     volumes:
       - postgres-data:/var/lib/postgresql
       - ./deployments/compose/postgres/init:/docker-entrypoint-initdb.d:ro

@@ -1,0 +1,17 @@
+{
+  "colors": {
+    "canvas": "#fbf5f7",
+    "surface": "#ffffff",
+    "ink": "#2a1523",
+    "muted": "#6b4f5f",
+    "line": "#ecd9e2",
+    "primary": "#8a1c5c",
+    "primaryStrong": "#6d1448",
+    "onPrimary": "#ffffff"
+  },
+  "typography": { "body": "humanist", "display": "serif" },
+  "shape": { "radius": "large" },
+  "spacing": { "density": "spacious" },
+  "layout": { "header": "centered" },
+  "assets": { "logoUrl": "", "faviconUrl": "" }
+}

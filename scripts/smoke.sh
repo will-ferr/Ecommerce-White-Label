@@ -39,9 +39,18 @@ expect "erro informa o código" '"code":"ROUTE_NOT_FOUND"' "$missing"
 
 expect "probes não ficam expostos na borda" "404" "$(status_of "$BASE_URL/health/ready")"
 
-store="$(curl -s -H 'Host: loja-teste.localhost' "$BASE_URL/")"
-expect "loja entrega HTML renderizado no servidor" "Loja em preparação" "$store"
-expect "loja renderiza o estado da API no servidor" "Operacional" "$store"
+aurora="$(curl -s -H 'Host: aurora.localhost' "$BASE_URL/")"
+terra="$(curl -s -H 'Host: terra.localhost' "$BASE_URL/")"
+expect "loja Aurora é renderizada no servidor" "Aurora Cosméticos" "$aurora"
+expect "loja Aurora recebe as próprias cores" "--wl-color-primary:#8a1c5c" "$aurora"
+expect "loja Terra é renderizada no servidor" "Terra Café" "$terra"
+expect "loja Terra recebe as próprias cores" "--wl-color-primary:#8a4b12" "$terra"
+if [[ "$aurora" == *"Terra Café"* || "$terra" == *"Aurora Cosméticos"* ]]; then fail "lojas misturam conteúdo"; else pass "lojas não misturam conteúdo"; fi
+
+expect "API identifica a loja pelo domínio" '"slug":"terra"' "$(curl -s -H 'Host: terra.localhost' "$BASE_URL/api/v1/storefront/config")"
+expect "cabeçalho do cliente não troca a loja" '"slug":"terra"' "$(curl -s -H 'Host: terra.localhost' -H 'X-Tenant-ID: aurora' -H 'X-Forwarded-Host: aurora.localhost' "$BASE_URL/api/v1/storefront/config")"
+expect "domínio desconhecido não tem loja na API" "STORE_NOT_FOUND" "$(curl -s -H 'Host: desconhecida.localhost' "$BASE_URL/api/v1/storefront/config")"
+expect "domínio desconhecido responde 404 na loja" "404" "$(status_of -H 'Host: desconhecida.localhost' "$BASE_URL/")"
 expect "painel da loja responde" "Admin da loja" "$(curl -s -H 'Host: admin.localhost' "$BASE_URL/")"
 expect "console da plataforma responde" "Console da plataforma" "$(curl -s -H 'Host: console.localhost' "$BASE_URL/")"
 
@@ -72,7 +81,7 @@ eventually "trace contém a consulta ao banco" has_db_span
 eventually "log chega ao Loki" has_log
 
 labels="$(curl -s -G http://127.0.0.1:9090/api/v1/series --data-urlencode 'match[]=http_server_request_duration_seconds_count')"
-if [[ "$labels" == *"loja-teste"* ]]; then fail "host do tenant virou rótulo de métrica"; else pass "host do tenant não vira rótulo de métrica"; fi
+if [[ "$labels" == *"aurora"* || "$labels" == *"terra"* ]]; then fail "host do tenant virou rótulo de métrica"; else pass "host do tenant não vira rótulo de métrica"; fi
 
 if (( failures > 0 )); then
   printf '\n%d verificação(ões) falharam\n' "$failures"
