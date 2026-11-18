@@ -92,11 +92,15 @@ func TestLoggerAddsCorrelationAndTraceIDs(t *testing.T) {
 		TraceID: traceID, SpanID: spanID, TraceFlags: trace.FlagsSampled,
 	}))
 	ctx = reqctx.WithCorrelationID(ctx, "corr-1")
+	reqctx.SetTenantID(ctx, "tenant-1")
 
 	var out bytes.Buffer
 	newTestLogger(&out).InfoContext(ctx, "event")
 
 	entry := decode(t, &out)
+	if entry["tenant_id"] != "tenant-1" {
+		t.Errorf("tenant_id missing: %v", entry)
+	}
 	if entry["correlation_id"] != "corr-1" || entry["trace_id"] != traceID.String() || entry["span_id"] != spanID.String() {
 		t.Errorf("identifiers missing: %v", entry)
 	}

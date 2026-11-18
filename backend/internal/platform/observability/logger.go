@@ -118,6 +118,9 @@ func (h contextHandler) Handle(ctx context.Context, record slog.Record) error {
 	if id := reqctx.CorrelationID(ctx); id != "" {
 		record.AddAttrs(slog.String("correlation_id", id))
 	}
+	if id := reqctx.TenantID(ctx); id != "" {
+		record.AddAttrs(slog.String("tenant_id", id))
+	}
 	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
 		record.AddAttrs(
 			slog.String("trace_id", sc.TraceID().String()),
