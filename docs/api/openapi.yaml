@@ -1,0 +1,131 @@
+openapi: 3.1.0
+info:
+  title: Plataforma E-commerce White Label
+  version: 0.1.0
+  description: API REST compartilhada por todas as lojas da plataforma.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: /
+    description: Mesma origem do domínio da loja
+security: []
+tags:
+  - name: System
+    description: Estado da plataforma
+paths:
+  /api/v1/status:
+    get:
+      operationId: getStatus
+      tags: [System]
+      summary: Consulta o estado público da plataforma
+      responses:
+        "200":
+          description: Plataforma operando, com ou sem degradação
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStatus"
+        "503":
+          description: Plataforma indisponível
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStatus"
+        default:
+          description: Erro inesperado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /health/live:
+    get:
+      operationId: getLiveness
+      tags: [System]
+      summary: Probe de liveness, acessível somente pela rede interna
+      responses:
+        "200":
+          description: Processo ativo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+  /health/ready:
+    get:
+      operationId: getReadiness
+      tags: [System]
+      summary: Probe de readiness, acessível somente pela rede interna
+      responses:
+        "200":
+          description: Instância pronta para receber tráfego
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessReport"
+        "503":
+          description: Instância fora do balanceamento
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessReport"
+components:
+  schemas:
+    SystemState:
+      type: string
+      enum: [ok, degraded, unavailable]
+    SystemStatus:
+      type: object
+      required: [status, version]
+      properties:
+        status:
+          $ref: "#/components/schemas/SystemState"
+        version:
+          type: string
+    ReadinessReport:
+      type: object
+      required: [status, checks]
+      properties:
+        status:
+          $ref: "#/components/schemas/SystemState"
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [up, down]
+    FieldError:
+      type: object
+      required: [field, code, message]
+      properties:
+        field:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+    Problem:
+      type: object
+      description: Erro no formato RFC 9457
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string
+        correlation_id:
+          type: string
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"

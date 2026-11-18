@@ -1,6 +1,6 @@
 # Documentação da plataforma
 
-Fase atual: **1, Arquitetura e planejamento**. Ainda não há código de aplicação.
+Fase atual: **2, Fundação da plataforma**. Para executar o projeto, veja [Primeiros passos](development/getting-started.md). O contrato da API está em [openapi.yaml](api/openapi.yaml).
 
 ## Entregas da Fase 1
 
@@ -19,6 +19,3 @@ Fase atual: **1, Arquitetura e planejamento**. Ainda não há código de aplica�
 | Extra | Riscos técnicos e arquiteturais | [risks.md](architecture/risks.md) |
 | Extra | Arquitetura orientada a eventos | [event-driven-architecture.md](architecture/event-driven-architecture.md) |
 
-## Decisão pendente
-
-**ADR-006:** usar Nuxt com SSR no storefront ou manter uma SPA única. Essa decisão precisa ser tomada antes da Fase 2. Veja as opções em [architecture-decisions.md](architecture/architecture-decisions.md#adr-006-storefront-com-ssr-em-nuxt-e-painéis-em-spa).

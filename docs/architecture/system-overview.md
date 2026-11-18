@@ -1,6 +1,6 @@
 # Visão geral do sistema
 
-Status: Fase 1, proposta para aprovação. As decisões citadas como ADR estão em [architecture-decisions.md](architecture-decisions.md).
+As decisões citadas como ADR estão em [architecture-decisions.md](architecture-decisions.md).
 
 ## 1. Objetivo e princípios
 
@@ -190,7 +190,7 @@ As versões exatas serão fixadas na Fase 2.
 
 | Área | Escolha | Por que | Alternativa descartada |
 | --- | --- | --- | --- |
-| Linguagem | Go | Requisito; binário único, concorrência simples | n/a |
+| Linguagem | Go 1.26 | Requisito; binário único, concorrência simples | n/a |
 | HTTP | `net/http` com chi | Compatível com a biblioteca padrão, sem framework invasivo | Gin, Fiber: API própria ou fora do `net/http` |
 | Acesso a dados | pgx com sqlc | SQL explícito e tipado, essencial para RLS e consultas auditáveis | GORM: esconde SQL e dificulta revisar o isolamento |
 | Migrations | goose | Migrations SQL versionadas, simples de rodar em pipeline | golang-migrate: equivalente, menos flexível em Go |
@@ -212,12 +212,12 @@ As versões exatas serão fixadas na Fase 2.
 ├── backend/
 │   ├── cmd/
 │   │   ├── api/                  # Servidor HTTP
-│   │   ├── worker/               # Consumidores e jobs
-│   │   ├── relay/                # Publicação do outbox
+│   │   ├── worker/               # Consumidores e jobs (Fase 6)
+│   │   ├── relay/                # Publicação do outbox (Fase 6)
 │   │   └── migrate/              # Migrations
 │   ├── internal/
 │   │   ├── app/                  # Composition root: conecta os módulos
-│   │   ├── platform/             # config, database, cache, messaging,
+│   │   ├── platform/             # config, database, cache, health, httpx,
 │   │   │                         # middleware, observability, security
 │   │   ├── modules/
 │   │   │   └── catalog/          # Mesmo formato em todos os módulos
@@ -227,9 +227,8 @@ As versões exatas serão fixadas na Fase 2.
 │   │   │           ├── domain/   # Entidades e regras, sem infraestrutura
 │   │   │           ├── app/      # Casos de uso e portas
 │   │   │           └── adapters/ # http, postgres, events, gateways
-│   │   └── shared/               # errors, events, pagination, money
-│   ├── migrations/               # Uma pasta por módulo
-│   ├── api/                      # OpenAPI usado na geração e nos contract tests
+│   │   └── shared/               # apperr, reqctx; depois events, pagination, money
+│   ├── migrations/               # Sequência única de migrations SQL
 │   ├── tests/                    # integration, isolation, concurrency, contract
 │   ├── Dockerfile
 │   ├── Makefile
@@ -241,14 +240,13 @@ As versões exatas serão fixadas na Fase 2.
 │   │   └── console/              # Admin da plataforma
 │   └── packages/
 │       ├── ui/                   # Design system e tokens CSS
-│       ├── theme/                # Validação e aplicação de temas
-│       ├── api-client/           # Cliente gerado a partir do OpenAPI
-│       └── config/               # ESLint, TypeScript, Tailwind
+│       ├── api-client/           # Cliente tipado a partir do OpenAPI
+│       └── panel-shell/          # Base compartilhada dos painéis
 ├── deployments/
-│   ├── compose/                  # Ambiente de desenvolvimento
+│   ├── compose/                  # Configurações do compose.yaml da raiz
 │   ├── kubernetes/               # Base e overlays por ambiente
 │   └── observability/            # Dashboards, alertas e Collector
-├── tests/                        # e2e, load (k6), security (ZAP)
+├── scripts/                      # Verificação do ambiente
 ├── docs/
 └── .github/workflows/
 ```
@@ -259,4 +257,4 @@ Diferenças em relação à estrutura sugerida na especificação:
 - **`cmd/worker` e `cmd/relay`** permitem escalar o processamento assíncrono separadamente da API.
 - **`shared/utils` foi removido**, porque pacotes genéricos tendem a acumular regras de negócio.
 - **`deployments/` fica na raiz**, porque o Compose e o Kubernetes cobrem backend e frontend.
-- **`frontend/` virou um monorepo** com três aplicações e pacotes compartilhados. Depende da aprovação do ADR-006.
+- **`frontend/` virou um monorepo** com três aplicações e pacotes compartilhados (ADR-006).

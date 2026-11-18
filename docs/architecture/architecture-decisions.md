@@ -4,20 +4,20 @@ Cada decisão registra contexto, escolha, consequências e alternativas. Uma dec
 
 | ADR | Decisão | Status |
 | --- | --- | --- |
-| 001 | Monólito modular com fronteiras impostas pelo compilador | Proposto |
-| 002 | SQL explícito com pgx e sqlc | Proposto |
-| 003 | Banco compartilhado com RLS | Proposto |
-| 004 | Um schema PostgreSQL por módulo | Proposto |
-| 005 | Tenant resolvido pelo Host e API na mesma origem | Proposto |
-| 006 | Storefront com SSR em Nuxt e painéis em SPA | **Aguardando decisão** |
-| 007 | Access token curto e refresh token opaco rotativo | Proposto |
-| 008 | RabbitMQ com Outbox | Proposto |
-| 009 | Checkout em transação local, gateway fora dela | Proposto |
-| 010 | Dinheiro em inteiros e identificadores UUIDv7 | Proposto |
-| 011 | Busca em PostgreSQL atrás de uma porta | Proposto |
-| 012 | Dados de cartão nunca passam pela plataforma | Proposto |
-| 013 | Temas por tokens validados | Proposto |
-| 014 | Segredos de tenant com envelope encryption | Proposto |
+| 001 | Monólito modular com fronteiras impostas pelo compilador | Aceito |
+| 002 | SQL explícito com pgx e sqlc | Aceito |
+| 003 | Banco compartilhado com RLS | Aceito |
+| 004 | Um schema PostgreSQL por módulo | Aceito |
+| 005 | Tenant resolvido pelo Host e API na mesma origem | Aceito |
+| 006 | Storefront com SSR em Nuxt e painéis em SPA | Aceito |
+| 007 | Access token curto e refresh token opaco rotativo | Aceito |
+| 008 | RabbitMQ com Outbox | Aceito |
+| 009 | Checkout em transação local, gateway fora dela | Aceito |
+| 010 | Dinheiro em inteiros e identificadores UUIDv7 | Aceito |
+| 011 | Busca em PostgreSQL atrás de uma porta | Aceito |
+| 012 | Dados de cartão nunca passam pela plataforma | Aceito |
+| 013 | Temas por tokens validados | Aceito |
+| 014 | Segredos de tenant com envelope encryption | Aceito |
 
 ## ADR-001: Monólito modular com fronteiras impostas pelo compilador
 
@@ -69,11 +69,9 @@ Cada decisão registra contexto, escolha, consequências e alternativas. Uma dec
 
 ## ADR-006: Storefront com SSR em Nuxt e painéis em SPA
 
-**Status: aguardando decisão do responsável pelo produto. Bloqueia o início do frontend na Fase 2.**
-
 **Contexto.** A especificação pede Vue 3 e sugere uma aplicação única, mas também exige SEO por tenant, Open Graph, dados estruturados e alta conversão. Robôs de redes sociais não executam JavaScript, então uma SPA pura não entrega Open Graph por produto.
 
-**Decisão proposta.** Storefront em Nuxt, que usa Vue 3, TypeScript, Composition API, Pinia, Vue Router e Tailwind. Painéis em SPA com Vite. Código compartilhado em pacotes de um monorepo.
+**Decisão.** Storefront em Nuxt, que usa Vue 3, TypeScript, Composition API, Pinia, Vue Router e Tailwind. Painéis em SPA com Vite. Código compartilhado em pacotes de um monorepo.
 
 | Opção | Vantagens | Desvantagens |
 | --- | --- | --- |

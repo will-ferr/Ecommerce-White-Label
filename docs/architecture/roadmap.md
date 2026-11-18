@@ -16,8 +16,8 @@ flowchart LR
 
 | Fase | Entregas | Critérios de saída |
 | --- | --- | --- |
-| **1. Arquitetura** | Documentos desta pasta, ADRs, modelo de dados, modelo de ameaças | Arquitetura aprovada e ADR-006 decidido |
-| **2. Fundação** | Backend e frontend executáveis, Compose com todos os serviços, migrations, configuração por ambiente, logs, OpenTelemetry, health checks, erros globais, CI básico | Ambiente sobe com um comando; trace de uma requisição visível no Grafana; CI verde |
+| **1. Arquitetura** | Documentos desta pasta, ADRs, modelo de dados, modelo de ameaças | Concluída |
+| **2. Fundação** | Backend e frontend executáveis, Compose com todos os serviços, migrations, configuração por ambiente, logs, OpenTelemetry, health checks, erros globais, CI básico | Ambiente sobe com um comando; trace de uma requisição visível no Grafana; CI verde. Uso real do RabbitMQ fica para a Fase 6 |
 | **3. Multi-Tenant** | Tenants, domínios, RLS, configurações, temas, feature flags, frontend com tema dinâmico | Dois tenants com marcas diferentes na mesma instância; suíte de isolamento no CI |
 | **4. Identidade** | Cadastro, login, recuperação, MFA, sessões, RBAC, auditoria, rate limit | Testes de autorização por rota; reuso de token revoga a sessão; deny-by-default comprovado |
 | **5. Núcleo comercial** | Produtos, categorias, estoque, preços, clientes, carrinho, checkout, pedidos e loja navegável | Compra completa com provedor de teste identificado como tal; testes de concorrência da última unidade |
@@ -30,8 +30,6 @@ flowchart LR
 
 | Documento | Fase |
 | --- | --- |
-| `docs/development/getting-started.md` | 2 |
-| `docs/api/openapi.yaml` | 2, evoluindo a cada fase |
 | `docs/security/incident-response.md` | 9 |
 | `docs/deployment/deployment-guide.md` | 9 |
 

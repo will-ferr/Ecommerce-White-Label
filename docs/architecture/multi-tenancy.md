@@ -88,8 +88,8 @@ Pontos que evitam falhas conhecidas:
 | --- | --- | --- |
 | `app_owner` | Migrations, nunca em tempo de execução | Dono dos objetos, também sujeito a `FORCE` |
 | `app_runtime` | API e Worker | DML nas tabelas, sempre filtrado por RLS |
-| `app_platform` | Console da plataforma, em pool separado | Políticas explícitas por tabela, com auditoria |
-| `app_relay` | Outbox Relay | Somente tabela de outbox |
+| `app_platform` | Console da plataforma, em pool separado (Fase 7) | Políticas explícitas por tabela, com auditoria |
+| `app_relay` | Outbox Relay (Fase 6) | Somente tabela de outbox |
 
 A busca de domínio ocorre antes de existir contexto de tenant. Por isso, `app_runtime` não lê a tabela de domínios e usa apenas a função `core.resolve_tenant_by_host`, que retorna ID e status.
 
