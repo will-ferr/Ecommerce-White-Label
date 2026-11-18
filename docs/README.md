@@ -1,6 +1,6 @@
 # Documentação da plataforma
 
-Fase atual: **2, Fundação da plataforma**. Para executar o projeto, veja [Primeiros passos](development/getting-started.md). O contrato da API está em [openapi.yaml](api/openapi.yaml).
+Fase atual: **3, Núcleo Multi-Tenant**. Para executar o projeto, veja [Primeiros passos](development/getting-started.md). O contrato da API está em [openapi.yaml](api/openapi.yaml).
 
 ## Entregas da Fase 1
 

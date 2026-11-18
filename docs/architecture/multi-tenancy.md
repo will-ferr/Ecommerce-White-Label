@@ -37,8 +37,8 @@ flowchart TD
 Regras:
 
 - **Nenhum `tenant_id` enviado no corpo, na query ou em cabeçalho é aceito** nas rotas da loja.
-- `X-Forwarded-Host` só é lido quando vem de um proxy confiável.
-- O resultado da resolução fica em cache local curto (60 segundos), invalidado por evento quando o domínio ou o status mudam.
+- A API usa somente o cabeçalho `Host` definido pela borda. `X-Forwarded-Host` e cabeçalhos semelhantes são ignorados.
+- O resultado da resolução fica em cache local por 30 segundos, e hosts desconhecidos por 10 segundos. Por isso, suspender uma loja ou remover um domínio leva até 30 segundos para valer em todas as instâncias.
 - Um domínio próprio só é ativado após comprovação por registro DNS TXT. Ao remover um domínio, a associação é apagada imediatamente.
 
 ## 3. Isolamento no PostgreSQL
@@ -88,7 +88,7 @@ Pontos que evitam falhas conhecidas:
 | --- | --- | --- |
 | `app_owner` | Migrations, nunca em tempo de execução | Dono dos objetos, também sujeito a `FORCE` |
 | `app_runtime` | API e Worker | DML nas tabelas, sempre filtrado por RLS |
-| `app_platform` | Console da plataforma, em pool separado (Fase 7) | Políticas explícitas por tabela, com auditoria |
+| `app_platform` | Ferramenta `tenantctl` e, na Fase 7, o console da plataforma | Gestão das tabelas de lojas; sem DDL e sem acesso a dados de negócio |
 | `app_relay` | Outbox Relay (Fase 6) | Somente tabela de outbox |
 
 A busca de domínio ocorre antes de existir contexto de tenant. Por isso, `app_runtime` não lê a tabela de domínios e usa apenas a função `core.resolve_tenant_by_host`, que retorna ID e status.
@@ -144,7 +144,11 @@ Uma funcionalidade está ativa quando `plano permite E tenant habilitou E não h
 
 Alterações de tema criam uma nova versão, com pré-visualização e retorno à versão anterior.
 
-## 6. Vizinho barulhento
+## 6. Provisionamento
+
+Enquanto não existe login, nenhuma rota HTTP altera dados de lojas. O cadastro é feito pela ferramenta `tenantctl`, executada por operadores com acesso ao ambiente (ADR-015). Os comandos estão em [Primeiros passos](../development/getting-started.md).
+
+## 7. Vizinho barulhento
 
 - Rate limit por tenant, por IP e por usuário.
 - Cotas por plano: produtos, usuários, armazenamento e chamadas de API.
@@ -152,9 +156,9 @@ Alterações de tema criam uma nova versão, com pré-visualização e retorno �
 - Limite de exportações e importações simultâneas por tenant.
 - Consumo justo nas filas de trabalhos pesados, com limite de mensagens em processamento por tenant.
 
-## 7. Testes obrigatórios de isolamento
+## 8. Testes obrigatórios de isolamento
 
-Uma prova de conceito em PostgreSQL 18 validou este desenho na Fase 1. Ela **não substitui** a suíte abaixo, que será criada na Fase 3 com Testcontainers.
+A suíte `backend/tests/integration` roda no CI com PostgreSQL real. Ela descobre automaticamente as tabelas com `tenant_id`, então tabelas futuras entram na verificação sem alteração nos testes. A prova de conceito abaixo validou o desenho na Fase 1.
 
 | Cenário da prova de conceito | Resultado |
 | --- | --- |

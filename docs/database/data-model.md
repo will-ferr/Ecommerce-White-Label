@@ -18,7 +18,7 @@ Modelo inicial do núcleo. As colunas completas serão definidas nas migrations 
 | Índices | Sempre iniciados por `tenant_id`; paginação por cursor `(tenant_id, created_at, id)` |
 | Isolamento | RLS habilitado e forçado em toda tabela com `tenant_id` |
 
-Tabelas **globais**, sem `tenant_id`: `core.tenants`, `core.plans`, `core.feature_flags`, `identity.platform_users`, `identity.permissions`.
+Tabelas **globais**, sem `tenant_id`: `core.plans`, `core.feature_flags`, `core.plan_features`, `identity.platform_users`, `identity.permissions`. A tabela `core.tenants` também usa RLS: cada loja lê somente a própria linha.
 
 ## 2. Plataforma e identidade
 
@@ -55,10 +55,12 @@ erDiagram
     TENANT_SETTINGS {
         uuid tenant_id PK
         text store_name
-        char currency
+        text currency
         text locale
         text timezone
-        jsonb seo
+        text seo_title
+        text seo_description
+        boolean seo_indexable
     }
     THEME_VERSIONS {
         uuid tenant_id PK

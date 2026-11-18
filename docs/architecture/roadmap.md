@@ -17,8 +17,8 @@ flowchart LR
 | Fase | Entregas | Critérios de saída |
 | --- | --- | --- |
 | **1. Arquitetura** | Documentos desta pasta, ADRs, modelo de dados, modelo de ameaças | Concluída |
-| **2. Fundação** | Backend e frontend executáveis, Compose com todos os serviços, migrations, configuração por ambiente, logs, OpenTelemetry, health checks, erros globais, CI básico | Ambiente sobe com um comando; trace de uma requisição visível no Grafana; CI verde. Uso real do RabbitMQ fica para a Fase 6 |
-| **3. Multi-Tenant** | Tenants, domínios, RLS, configurações, temas, feature flags, frontend com tema dinâmico | Dois tenants com marcas diferentes na mesma instância; suíte de isolamento no CI |
+| **2. Fundação** | Backend e frontend executáveis, Compose com todos os serviços, migrations, configuração por ambiente, logs, OpenTelemetry, health checks, erros globais, CI básico | Concluída. Uso real do RabbitMQ fica para a Fase 6 |
+| **3. Multi-Tenant** | Tenants, domínios, RLS, configurações, temas, feature flags, frontend com tema dinâmico | Concluída. A gestão de lojas pelo painel fica para a Fase 7 |
 | **4. Identidade** | Cadastro, login, recuperação, MFA, sessões, RBAC, auditoria, rate limit | Testes de autorização por rota; reuso de token revoga a sessão; deny-by-default comprovado |
 | **5. Núcleo comercial** | Produtos, categorias, estoque, preços, clientes, carrinho, checkout, pedidos e loja navegável | Compra completa com provedor de teste identificado como tal; testes de concorrência da última unidade |
 | **6. Integrações** | RabbitMQ e Outbox em produção interna, um gateway real em sandbox, webhooks, frete, e-mail, busca | Fluxo validado no sandbox real; webhook duplicado não gera efeito duplo; DLQ funcionando |

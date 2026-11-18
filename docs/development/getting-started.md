@@ -10,11 +10,15 @@
 ```bash
 cp .env.example .env
 docker compose up -d --build --wait
+bash scripts/seed-dev.sh
 ```
+
+O segundo comando cria duas lojas de demonstração e pode ser repetido sem efeito colateral.
 
 | Serviço | Endereço |
 | --- | --- |
-| Loja | <http://loja-teste.localhost:8080> |
+| Loja Aurora (demonstração) | <http://aurora.localhost:8080> |
+| Loja Terra (demonstração) | <http://terra.localhost:8080> |
 | Admin da loja | <http://admin.localhost:8080> |
 | Console da plataforma | <http://console.localhost:8080> |
 | API | <http://localhost:8080/api/v1/status> |
@@ -38,6 +42,31 @@ bash scripts/smoke.sh
 
 O script confere a API, as três aplicações, os cabeçalhos de segurança e a chegada de métricas, logs e traces.
 
+## Gerenciar lojas
+
+Lojas são gerenciadas pela ferramenta `tenantctl`:
+
+```bash
+docker compose run --rm tenantctl tenant list
+docker compose run --rm tenantctl tenant create --slug minha-loja --name "Minha Loja" --plan growth
+docker compose run --rm tenantctl settings set --slug minha-loja --seo-description "Descrição da loja"
+docker compose run --rm tenantctl feature set --slug minha-loja --key wishlist --enabled=false
+docker compose run --rm tenantctl theme publish --slug minha-loja --file /seed/aurora.json
+docker compose run --rm tenantctl theme rollback --slug minha-loja --version 1
+docker compose run --rm tenantctl tenant suspend --slug minha-loja
+```
+
+A loja criada fica disponível em `http://minha-loja.localhost:8080`. Alterações de status e de domínio levam até 30 segundos para valer.
+
+Para usar um domínio próprio, registre-o, crie o registro DNS TXT informado e confirme:
+
+```bash
+docker compose run --rm tenantctl domain add --slug minha-loja --host www.minhaloja.com.br
+docker compose run --rm tenantctl domain verify --host www.minhaloja.com.br
+```
+
+Os arquivos de tema ficam em `deployments/compose/seed`, montados em `/seed` no container. O backend recusa cores com contraste insuficiente, valores fora das listas permitidas e qualquer campo desconhecido.
+
 ## Backend
 
 ```bash
@@ -48,6 +77,13 @@ golangci-lint run ./...                                # Lint
 ```
 
 Para criar uma migration, adicione um arquivo em `backend/migrations` com o próximo número da sequência. Cada arquivo precisa das seções `-- +goose Up` e `-- +goose Down`.
+
+Depois de alterar consultas SQL, regenere o código:
+
+```bash
+cd backend
+docker run --rm -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1 generate
+```
 
 ## Frontend
 
@@ -88,6 +124,8 @@ A API também recusa iniciar se o usuário do banco for superusuário ou tiver `
 | `DB_SSLMODE` | `verify-full` | Modo TLS do PostgreSQL |
 | `DB_MAX_CONNS`, `DB_MIN_CONNS` | `20`, `2` | Limites do pool |
 | `MIGRATION_DB_USER`, `MIGRATION_DB_PASSWORD` | obrigatórias nas migrations | Credencial usada só para migrations |
+| `PLATFORM_DB_USER`, `PLATFORM_DB_PASSWORD` | obrigatórias no `tenantctl` | Credencial usada só para gerenciar lojas |
+| `PLATFORM_BASE_DOMAIN` | obrigatória no `tenantctl` | Domínio base dos subdomínios das lojas |
 | `REDIS_ADDR` | obrigatória | Endereço do Redis |
 | `REDIS_PASSWORD`, `REDIS_TLS` | vazia, `false` | Acesso ao Redis |
 | `TELEMETRY_ENABLED` | `true` | Liga a exportação de telemetria |

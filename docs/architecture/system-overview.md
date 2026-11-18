@@ -214,7 +214,8 @@ As versões exatas serão fixadas na Fase 2.
 │   │   ├── api/                  # Servidor HTTP
 │   │   ├── worker/               # Consumidores e jobs (Fase 6)
 │   │   ├── relay/                # Publicação do outbox (Fase 6)
-│   │   └── migrate/              # Migrations
+│   │   ├── migrate/              # Migrations
+│   │   └── tenantctl/            # Gestão de lojas pelo operador
 │   ├── internal/
 │   │   ├── app/                  # Composition root: conecta os módulos
 │   │   ├── platform/             # config, database, cache, health, httpx,
@@ -241,6 +242,7 @@ As versões exatas serão fixadas na Fase 2.
 │   └── packages/
 │       ├── ui/                   # Design system e tokens CSS
 │       ├── api-client/           # Cliente tipado a partir do OpenAPI
+│       ├── theme/                # Conversão segura de temas em CSS
 │       └── panel-shell/          # Base compartilhada dos painéis
 ├── deployments/
 │   ├── compose/                  # Configurações do compose.yaml da raiz

@@ -13,6 +13,8 @@ security: []
 tags:
   - name: System
     description: Estado da plataforma
+  - name: Storefront
+    description: Configuração pública das lojas
 paths:
   /api/v1/status:
     get:
@@ -34,6 +36,37 @@ paths:
                 $ref: "#/components/schemas/SystemStatus"
         default:
           description: Erro inesperado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/storefront/config:
+    get:
+      operationId: getStorefrontConfig
+      tags: [Storefront]
+      summary: Consulta a configuração pública da loja do domínio acessado
+      description: A loja é identificada somente pelo domínio da requisição.
+      responses:
+        "200":
+          description: Configuração da loja
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorefrontConfig"
+        "403":
+          description: Loja suspensa (STORE_UNAVAILABLE)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Nenhuma loja configurada para o domínio (STORE_NOT_FOUND)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Não foi possível identificar a loja no momento
           content:
             application/problem+json:
               schema:
@@ -96,6 +129,110 @@ components:
           additionalProperties:
             type: string
             enum: [up, down]
+    StorefrontConfig:
+      type: object
+      required: [slug, store, seo, theme, features]
+      properties:
+        slug:
+          type: string
+        store:
+          type: object
+          required: [name, currency, locale, timezone]
+          properties:
+            name:
+              type: string
+            currency:
+              type: string
+            locale:
+              type: string
+            timezone:
+              type: string
+        seo:
+          type: object
+          required: [title, description, indexable]
+          properties:
+            title:
+              type: string
+            description:
+              type: string
+            indexable:
+              type: boolean
+        theme:
+          type: object
+          required: [version, tokens]
+          properties:
+            version:
+              type: integer
+            tokens:
+              $ref: "#/components/schemas/ThemeTokens"
+        features:
+          type: object
+          additionalProperties:
+            type: boolean
+    FontFamily:
+      type: string
+      enum: [system, humanist, geometric, serif, slab]
+    ThemeTokens:
+      type: object
+      required: [colors, typography, shape, spacing, layout, assets]
+      properties:
+        colors:
+          type: object
+          required: [canvas, surface, ink, muted, line, primary, primaryStrong, onPrimary]
+          properties:
+            canvas:
+              type: string
+            surface:
+              type: string
+            ink:
+              type: string
+            muted:
+              type: string
+            line:
+              type: string
+            primary:
+              type: string
+            primaryStrong:
+              type: string
+            onPrimary:
+              type: string
+        typography:
+          type: object
+          required: [body, display]
+          properties:
+            body:
+              $ref: "#/components/schemas/FontFamily"
+            display:
+              $ref: "#/components/schemas/FontFamily"
+        shape:
+          type: object
+          required: [radius]
+          properties:
+            radius:
+              type: string
+              enum: [none, small, medium, large]
+        spacing:
+          type: object
+          required: [density]
+          properties:
+            density:
+              type: string
+              enum: [compact, comfortable, spacious]
+        layout:
+          type: object
+          required: [header]
+          properties:
+            header:
+              type: string
+              enum: [classic, centered]
+        assets:
+          type: object
+          required: [logoUrl, faviconUrl]
+          properties:
+            logoUrl:
+              type: string
+            faviconUrl:
+              type: string
     FieldError:
       type: object
       required: [field, code, message]

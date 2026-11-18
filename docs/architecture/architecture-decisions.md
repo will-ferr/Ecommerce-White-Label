@@ -18,6 +18,7 @@ Cada decisão registra contexto, escolha, consequências e alternativas. Uma dec
 | 012 | Dados de cartão nunca passam pela plataforma | Aceito |
 | 013 | Temas por tokens validados | Aceito |
 | 014 | Segredos de tenant com envelope encryption | Aceito |
+| 015 | Gestão de lojas por linha de comando até existir login | Aceito |
 
 ## ADR-001: Monólito modular com fronteiras impostas pelo compilador
 
@@ -136,3 +137,13 @@ Cada decisão registra contexto, escolha, consequências e alternativas. Uma dec
 **Decisão.** Credenciais de gateways e dados pessoais sensíveis são cifrados com AES-256-GCM. Cada tenant tem sua chave de dados, protegida por uma chave mestra no KMS. O ID do tenant entra como dado autenticado. CPF e CNPJ têm um índice cego HMAC para busca exata.
 
 **Consequências.** Um vazamento do banco não revela segredos, e a rotação é feita por tenant. Em desenvolvimento, a chave mestra vem de uma variável de ambiente local.
+
+## ADR-015: Gestão de lojas por linha de comando até existir login
+
+**Contexto.** A Fase 3 cria lojas e temas, mas autenticação e permissões só chegam na Fase 4. Uma rota HTTP de escrita sem autorização exporia todas as lojas.
+
+**Decisão.** O cadastro é feito pela ferramenta `tenantctl`, com o papel de banco `app_platform`. A API usa apenas leitura nas tabelas de lojas.
+
+**Consequências.** Nenhuma superfície de escrita fica exposta na internet. As regras ficam nos casos de uso do módulo e serão reaproveitadas pelo console da Fase 7. Até a Fase 4, as alterações feitas pela ferramenta não têm trilha de auditoria própria.
+
+**Alternativas.** Rotas protegidas por uma chave fixa: segredo compartilhado, sem identidade do operador e difícil de revogar.
