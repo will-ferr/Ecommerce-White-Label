@@ -26,6 +26,7 @@ const (
 	superuserPassword = "test-superuser"
 	ownerPassword     = "test-owner"
 	runtimePassword   = "test-runtime"
+	platformPassword  = "test-platform"
 	postgresImage     = "postgres:18.7-alpine"
 )
 
@@ -51,6 +52,7 @@ func startPostgres(ctx context.Context, t *testing.T) environment {
 		testcontainers.WithEnv(map[string]string{
 			"MIGRATION_DB_PASSWORD": ownerPassword,
 			"DB_PASSWORD":           runtimePassword,
+			"PLATFORM_DB_PASSWORD":  platformPassword,
 		}),
 		postgres.BasicWaitStrategies(),
 	)

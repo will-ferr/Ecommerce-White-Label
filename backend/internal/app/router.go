@@ -22,6 +22,8 @@ type RouterDeps struct {
 	RequestTimeout time.Duration
 	MaxBodyBytes   int64
 	HSTS           bool
+	// RegisterAPI adds the routes of the business modules under /api/v1.
+	RegisterAPI func(chi.Router)
 }
 
 // NewRouter builds the HTTP handler with its middleware chain.
@@ -50,6 +52,9 @@ func NewRouter(deps RouterDeps) http.Handler {
 
 	router.Route("/api/v1", func(api chi.Router) {
 		api.Get("/status", deps.Health.Public)
+		if deps.RegisterAPI != nil {
+			deps.RegisterAPI(api)
+		}
 	})
 
 	// Every route is public, so trace context sent by clients only becomes a

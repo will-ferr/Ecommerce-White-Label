@@ -48,6 +48,7 @@ func Run(ctx context.Context, cfg config.Config, version string, logger *slog.Lo
 			RequestTimeout: cfg.HTTP.RequestTimeout,
 			MaxBodyBytes:   cfg.HTTP.MaxBodyBytes,
 			HSTS:           cfg.Environment.IsHardened(),
+			RegisterAPI:    RegisterModules(pool, logger),
 		}),
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTP.ReadTimeout,
