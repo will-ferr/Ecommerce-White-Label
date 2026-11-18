@@ -1,0 +1,29 @@
+# Segredos e configuração local
+.env
+.env.*
+!.env.example
+
+# Go
+backend/bin/
+*.test
+*.out
+coverage.*
+
+# Node
+node_modules/
+dist/
+.nuxt/
+.output/
+.vite/
+*.tsbuildinfo
+
+# Testes
+playwright-report/
+test-results/
+
+# Ferramentas
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
