@@ -8,6 +8,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// PlatformTenantID is the reserved tenant that holds platform operators.
+var PlatformTenantID = uuid.MustParse("01960000-0000-7000-8000-000000000001")
+
 // ErrMissingTenant means tenant data was requested without a validated tenant.
 var ErrMissingTenant = errors.New("tenant context is missing")
 

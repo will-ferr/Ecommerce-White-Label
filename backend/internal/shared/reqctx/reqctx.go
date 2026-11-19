@@ -11,6 +11,7 @@ type requestKey struct{}
 type requestInfo struct {
 	correlationID string
 	tenantID      atomic.Pointer[string]
+	clientIP      atomic.Pointer[string]
 }
 
 // WithCorrelationID returns a context carrying the correlation ID.
@@ -39,6 +40,23 @@ func TenantID(ctx context.Context) string {
 	if info, ok := ctx.Value(requestKey{}).(*requestInfo); ok {
 		if id := info.tenantID.Load(); id != nil {
 			return *id
+		}
+	}
+	return ""
+}
+
+// SetClientIP records the address of the client.
+func SetClientIP(ctx context.Context, ip string) {
+	if info, ok := ctx.Value(requestKey{}).(*requestInfo); ok {
+		info.clientIP.Store(&ip)
+	}
+}
+
+// ClientIP returns the address of the client, or an empty string.
+func ClientIP(ctx context.Context) string {
+	if info, ok := ctx.Value(requestKey{}).(*requestInfo); ok {
+		if ip := info.clientIP.Load(); ip != nil {
+			return *ip
 		}
 	}
 	return ""

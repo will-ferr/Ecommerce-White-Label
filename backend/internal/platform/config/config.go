@@ -39,6 +39,7 @@ type Config struct {
 	Database    Database
 	Redis       Redis
 	Telemetry   Telemetry
+	Auth        Auth
 }
 
 // HTTP configures the HTTP server.
@@ -130,6 +131,7 @@ func Load(lookup Lookup) (Config, error) {
 			OTLPInsecure:   r.boolean("TELEMETRY_OTLP_INSECURE", false),
 			MetricInterval: r.duration("TELEMETRY_METRIC_INTERVAL", 15*time.Second),
 		},
+		Auth: r.auth(),
 	}
 
 	r.check(cfg.HTTP.WriteTimeout > cfg.HTTP.RequestTimeout,
@@ -143,6 +145,7 @@ func Load(lookup Lookup) (Config, error) {
 		r.check(cfg.Redis.TLS, "REDIS_TLS must be true in staging and production")
 		r.check(!cfg.Redis.Password.IsZero(), "REDIS_PASSWORD is required in staging and production")
 		r.check(!cfg.Telemetry.OTLPInsecure, "TELEMETRY_OTLP_INSECURE must be false in staging and production")
+		r.checkHardenedAuth(cfg.Auth)
 	}
 
 	if err := errors.Join(r.errs...); err != nil {

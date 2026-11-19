@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"testing"
@@ -16,6 +17,13 @@ func validEnv() map[string]string {
 		"DB_PASSWORD": "p@ss/word",
 		"DB_SSLMODE":  "disable",
 		"REDIS_ADDR":  "redis:6379",
+
+		"AUTH_SIGNING_KEY":   base64.StdEncoding.EncodeToString([]byte("test-signing-key-with-32-bytes-0")),
+		"MFA_ENCRYPTION_KEY": base64.StdEncoding.EncodeToString([]byte("test-mfa-key-with-exact-32-bytes")),
+		"ADMIN_PUBLIC_URL":   "https://admin.example.com",
+		"CONSOLE_PUBLIC_URL": "https://console.example.com",
+		"SMTP_ADDR":          "mail.example.com:587",
+		"SMTP_FROM":          "no-reply@example.com",
 	}
 }
 
@@ -71,6 +79,10 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		"bad ssl mode":        {"DB_SSLMODE", "prefer"},
 		"write below request": {"HTTP_WRITE_TIMEOUT", "1s"},
 		"min conns above max": {"DB_MIN_CONNS", "400"},
+		"short signing key":   {"AUTH_SIGNING_KEY", "c2hvcnQ="},
+		"key is not base64":   {"MFA_ENCRYPTION_KEY", "not base64!"},
+		"relative admin url":  {"ADMIN_PUBLIC_URL", "admin.example.com"},
+		"bad trusted proxy":   {"TRUSTED_PROXIES", "10.0.0.1"},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -89,6 +101,12 @@ func TestHardenedEnvironmentsRequireSecureTransport(t *testing.T) {
 		"redis without tls":             {"REDIS_TLS", "false"},
 		"redis without password":        {"REDIS_PASSWORD", ""},
 		"insecure telemetry":            {"TELEMETRY_OTLP_INSECURE", "true"},
+		"insecure cookie":               {"AUTH_COOKIE_SECURE", "false"},
+		"rate limit disabled":           {"RATE_LIMIT_ENABLED", "false"},
+		"mail without tls":              {"SMTP_REQUIRE_TLS", "false"},
+		"store links without tls":       {"STORE_PUBLIC_SCHEME", "http"},
+		"sample signing key":            {"AUTH_SIGNING_KEY", base64.StdEncoding.EncodeToString([]byte("development-only-signing-key-001"))},
+		"sample mfa key":                {"MFA_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString([]byte("development-only-mfa-encrypt-001"))},
 	}
 	for _, environment := range []string{"staging", "production"} {
 		for name, tt := range tests {
