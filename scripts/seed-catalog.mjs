@@ -123,6 +123,16 @@ async function seed(slug, catalog) {
   }
   await call(admin, 'POST', '/staff/shipping/methods', { name: 'Entrega padrão', kind: 'flat', price: 1500, minDays: 3, maxDays: 7, active: true }, accessToken)
   await call(admin, 'POST', '/staff/shipping/methods', { name: 'Retirada na loja', kind: 'pickup', price: 0, minDays: 0, maxDays: 1, active: true }, accessToken)
+  // A table priced by the store itself: Southeast and other regions, by weight.
+  await call(admin, 'POST', '/staff/shipping/methods', {
+    name: 'Transportadora regional', kind: 'table', price: 0, minDays: 0, maxDays: 0, active: true,
+    rates: [
+      { postalCodeStart: '01000000', postalCodeEnd: '39999999', maxWeightGrams: 2000, price: 1890, minDays: 2, maxDays: 4 },
+      { postalCodeStart: '01000000', postalCodeEnd: '39999999', maxWeightGrams: 10000, price: 3290, minDays: 2, maxDays: 5 },
+      { postalCodeStart: '40000000', postalCodeEnd: '99999999', maxWeightGrams: 2000, price: 2990, minDays: 5, maxDays: 9 },
+      { postalCodeStart: '40000000', postalCodeEnd: '99999999', maxWeightGrams: 10000, price: 4990, minDays: 6, maxDays: 12 },
+    ],
+  }, accessToken)
   console.log(`Catálogo de ${slug} criado. Painel: http://admin.localhost:8080 (loja ${slug}, ${email}, senha ${password})`)
 }
 

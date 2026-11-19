@@ -12,6 +12,34 @@ x-database-env: &database-env
   DB_NAME: ecommerce
   DB_SSLMODE: disable
 
+# Settings shared by the API and the worker, which run the same code.
+x-app-env: &app-env
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: ecommerce
+  DB_SSLMODE: disable
+  APP_ENV: ${APP_ENV:?copie .env.example para .env}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  DB_USER: app_runtime
+  DB_PASSWORD: ${DB_PASSWORD:?copie .env.example para .env}
+  REDIS_ADDR: redis:6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?copie .env.example para .env}
+  TELEMETRY_OTLP_ENDPOINT: otel-collector:4317
+  TELEMETRY_OTLP_INSECURE: "true"
+  AUTH_SIGNING_KEY: ${AUTH_SIGNING_KEY:?copie .env.example para .env}
+  MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?copie .env.example para .env}
+  AUTH_COOKIE_SECURE: "false"
+  TRUSTED_PROXIES: 172.16.0.0/12,192.168.0.0/16
+  STORE_PUBLIC_SCHEME: http
+  STORE_PUBLIC_PORT: "8080"
+  ADMIN_PUBLIC_URL: http://admin.localhost:8080
+  CONSOLE_PUBLIC_URL: http://console.localhost:8080
+  SMTP_ADDR: mailpit:1025
+  SMTP_FROM: nao-responda@plataforma.localhost
+  SMTP_REQUIRE_TLS: "false"
+  # Development only: buyers approve or refuse payments themselves.
+  PAYMENTS_TEST_PROVIDER: "true"
+
 services:
   edge:
     <<: *hardening
@@ -37,31 +65,9 @@ services:
       context: ./backend
       args:
         VERSION: 0.1.0-dev
-    environment:
-      <<: *database-env
-      APP_ENV: ${APP_ENV:?copie .env.example para .env}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DB_USER: app_runtime
-      DB_PASSWORD: ${DB_PASSWORD:?copie .env.example para .env}
-      REDIS_ADDR: redis:6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?copie .env.example para .env}
-      TELEMETRY_OTLP_ENDPOINT: otel-collector:4317
-      TELEMETRY_OTLP_INSECURE: "true"
-      AUTH_SIGNING_KEY: ${AUTH_SIGNING_KEY:?copie .env.example para .env}
-      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?copie .env.example para .env}
-      AUTH_COOKIE_SECURE: "false"
-      TRUSTED_PROXIES: 172.16.0.0/12,192.168.0.0/16
-      STORE_PUBLIC_SCHEME: http
-      STORE_PUBLIC_PORT: "8080"
-      ADMIN_PUBLIC_URL: http://admin.localhost:8080
-      CONSOLE_PUBLIC_URL: http://console.localhost:8080
-      SMTP_ADDR: mailpit:1025
-      SMTP_FROM: nao-responda@plataforma.localhost
-      SMTP_REQUIRE_TLS: "false"
-      PAYMENTS_TEST_PROVIDER: "true"
+    environment: *app-env
     depends_on:
       migrate: { condition: service_completed_successfully }
-      mailpit: { condition: service_started }
       redis: { condition: service_healthy }
       otel-collector: { condition: service_started }
     healthcheck:
@@ -70,6 +76,29 @@ services:
       timeout: 3s
       retries: 6
       start_period: 5s
+
+  # Publishes events, consumes them, sends e-mail and runs scheduled jobs.
+  worker:
+    <<: *hardening
+    image: ecommerce-white-label-api
+    pull_policy: never
+    entrypoint: ["/app/worker"]
+    environment:
+      <<: *app-env
+      SERVICE_NAME: ecommerce-worker
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ecommerce
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?copie .env.example para .env}
+    depends_on:
+      api: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      mailpit: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "/app/worker", "-healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
 
   migrate:
     build:

@@ -85,6 +85,16 @@ expect "equipe exige login" "AUTHENTICATION_REQUIRED" "$(curl -s -H 'Host: admin
 expect "console exige login" "AUTHENTICATION_REQUIRED" "$(curl -s -H 'Host: console.localhost' "$BASE_URL/api/v1/platform/audit")"
 expect "renovação de sessão recusa outro site" "ORIGIN_NOT_ALLOWED" "$(curl -s -X POST -H 'Host: aurora.localhost' -H 'Origin: https://evil.test' "$BASE_URL/api/v1/auth/refresh")"
 
+expect "webhook sem assinatura é recusado" "WEBHOOK_SIGNATURE_INVALID" "$(curl -s -X POST -H 'Host: aurora.localhost' -d '{}' "$BASE_URL/api/v1/webhooks/payments/test")"
+expect "webhook de provedor desconhecido não existe" "404" "$(status_of -X POST -H 'Host: aurora.localhost' -d '{}' "$BASE_URL/api/v1/webhooks/payments/desconhecido")"
+
+if docker compose exec -T worker /app/worker -healthcheck >/dev/null 2>&1; then pass "worker está saudável"; else fail "worker está saudável"; fi
+queues="$(docker compose exec -T rabbitmq rabbitmqctl list_queues --quiet name 2>/dev/null)"
+expect "fila de notificações existe" "sales-notifications" "$queues"
+expect "fila de mensagens mortas existe" "sales-notifications.dlq" "$queues"
+expect "filas de nova tentativa existem" "sales-refunds.retry.4" "$queues"
+eventually "atraso do outbox chega ao Prometheus" has_metric 'messaging_outbox_lag_seconds'
+
 labels="$(curl -s -G http://127.0.0.1:9090/api/v1/series --data-urlencode 'match[]=http_server_request_duration_seconds_count')"
 if [[ "$labels" == *"aurora"* || "$labels" == *"terra"* ]]; then fail "host do tenant virou rótulo de métrica"; else pass "host do tenant não vira rótulo de métrica"; fi
 
