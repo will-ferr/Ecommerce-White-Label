@@ -2,3 +2,4 @@
 @import '@whitelabel/ui/tokens.css';
 
 @source '../../../../packages/ui/src';
+@source '../../../../packages/auth/src';

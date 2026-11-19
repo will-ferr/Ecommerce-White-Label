@@ -12,6 +12,7 @@
   "dependencies": {
     "@pinia/nuxt": "^1.0.3",
     "@whitelabel/api-client": "^0.1.0",
+    "@whitelabel/auth": "^0.1.0",
     "@whitelabel/theme": "^0.1.0",
     "@whitelabel/ui": "^0.1.0",
     "nuxt": "^4.6.4",

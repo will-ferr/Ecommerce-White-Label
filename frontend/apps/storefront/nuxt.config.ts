@@ -6,13 +6,16 @@ export default defineNuxtConfig({
   css: ['~/assets/main.css'],
   devtools: { enabled: false },
   telemetry: false,
-  build: { transpile: ['@whitelabel/ui', '@whitelabel/api-client', '@whitelabel/theme'] },
+  build: { transpile: ['@whitelabel/ui', '@whitelabel/api-client', '@whitelabel/theme', '@whitelabel/auth'] },
   vite: { plugins: [tailwindcss()] },
   app: {
     head: {
       htmlAttrs: { lang: 'pt-BR' },
       link: [{ key: 'icon', rel: 'icon', href: 'data:,' }],
     },
+  },
+  routeRules: {
+    '/conta': { ssr: false },
   },
   runtimeConfig: {
     // Overridden by NUXT_API_INTERNAL_URL. Used only for server-side rendering.
