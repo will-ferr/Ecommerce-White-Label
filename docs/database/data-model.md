@@ -347,6 +347,20 @@ Ainda não existem: marcas, listas de preço, mídia além de URLs de imagem, CP
 
 Também mudaram: `payments.payments.status` aceita `refund_pending`, `orders.orders.store_host` guarda o domínio onde o pedido foi feito, e `catalog.product_document()` alimenta o índice de busca.
 
+### Implementado na Fase 7
+
+| Tabela | Função |
+| --- | --- |
+| `promotions.coupons` | Cupons por loja, com tipo, valor, validade, pedido mínimo, limites e contador de usos protegido por `CHECK` |
+| `promotions.redemptions` | Uso de um cupom por pedido e e-mail; liberado quando o pedido é cancelado |
+| `content.pages` | Páginas de conteúdo com versão para detectar edição concorrente |
+
+Também mudaram:
+
+- `orders.orders.coupon_code` registra o cupom do pedido.
+- `identity.users.status` aceita `erased`, para contas anonimizadas a pedido do cliente.
+- `app_runtime` pode alterar nome e SEO da própria loja e publicar temas, sempre sob RLS.
+
 ## 5. Tabelas transversais
 
 | Tabela | Função | Restrição principal |

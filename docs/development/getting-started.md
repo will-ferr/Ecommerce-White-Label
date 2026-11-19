@@ -24,7 +24,7 @@ O ambiente local usa o **Pagamento de teste**, identificado como tal no checkout
 | Loja Aurora (demonstração) | <http://aurora.localhost:8080> |
 | Loja Terra (demonstração) | <http://terra.localhost:8080> |
 | Admin da loja | <http://admin.localhost:8080> |
-| Console da plataforma | <http://console.localhost:8080> |
+| Console da plataforma (API no serviço `platform`) | <http://console.localhost:8080> |
 | API | <http://localhost:8080/api/v1/status> |
 | E-mails de desenvolvimento (Mailpit) | <http://localhost:8025> |
 | Grafana (usuário `admin`, senha em `.env`) | <http://localhost:3000> |
@@ -50,6 +50,10 @@ docker compose exec worker /app/worker dlq list --consumer sales-notifications
 
 As filas podem ser vistas no painel do RabbitMQ. Para reprocessar mensagens mortas, veja [Arquitetura orientada a eventos](../architecture/event-driven-architecture.md#6-implementado-na-fase-6).
 
+## SEO por loja
+
+Cada loja publica `/robots.txt` e `/sitemap.xml`. Enquanto a opção "Permitir que buscadores indexem a loja" estiver desligada no admin (padrão), o robots.txt bloqueia tudo e o sitemap fica vazio.
+
 ## Verificar o ambiente
 
 ```bash
@@ -68,7 +72,16 @@ npm run test:e2e
 
 ## Gerenciar lojas
 
-Lojas são gerenciadas pela ferramenta `tenantctl`:
+No dia a dia, lojas são criadas e acompanhadas pelo console da plataforma. Lá ficam:
+
+- status da loja;
+- domínios próprios;
+- recursos do plano;
+- convite da equipe, enviado por e-mail.
+
+Cada loja configura nome, SEO, aparência, cupons, páginas e frete no próprio admin.
+
+O primeiro operador da plataforma é criado pela linha de comando, e a ferramenta `tenantctl` continua disponível para automação:
 
 ```bash
 docker compose run --rm tenantctl tenant list
@@ -164,8 +177,8 @@ A API também recusa iniciar se o usuário do banco for superusuário ou tiver `
 | `DB_SSLMODE` | `verify-full` | Modo TLS do PostgreSQL |
 | `DB_MAX_CONNS`, `DB_MIN_CONNS` | `20`, `2` | Limites do pool |
 | `MIGRATION_DB_USER`, `MIGRATION_DB_PASSWORD` | obrigatórias nas migrations | Credencial usada só para migrations |
-| `PLATFORM_DB_USER`, `PLATFORM_DB_PASSWORD` | obrigatórias no `tenantctl` | Credencial usada só para gerenciar lojas |
-| `PLATFORM_BASE_DOMAIN` | obrigatória no `tenantctl` | Domínio base dos subdomínios das lojas |
+| `PLATFORM_DB_USER`, `PLATFORM_DB_PASSWORD` | obrigatórias no `tenantctl` e no serviço `platform` | Credencial usada só para gerenciar lojas. Nunca configure na API das lojas |
+| `PLATFORM_BASE_DOMAIN` | obrigatória no `tenantctl` e no serviço `platform` | Domínio base dos subdomínios das lojas |
 | `AUTH_SIGNING_KEY`, `MFA_ENCRYPTION_KEY` | obrigatórias | Chaves de 32 bytes em base64. Gere com `openssl rand -base64 32` |
 | `AUTH_COOKIE_SECURE` | `true` | Exige HTTPS no cookie de sessão |
 | `TRUSTED_PROXIES` | vazia | Faixas CIDR dos proxies confiáveis |

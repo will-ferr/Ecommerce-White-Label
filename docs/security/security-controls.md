@@ -37,6 +37,8 @@ Referências: OWASP ASVS e OWASP Top 10. Este documento descreve controles técn
 | Payload excessivo | Limite de corpo por rota, timeouts de leitura e escrita, limite de concorrência |
 | Upload malicioso | URL pré-assinada, verificação do tipo real, reprocessamento de imagens, domínio separado |
 | Erros | Formato RFC 9457 sem detalhes internos; `correlation_id` para suporte |
+| Conteúdo de loja | Páginas em formato de texto próprio, renderizado sem HTML; links só HTTPS ou internos |
+| Credencial entre lojas | Papel `app_platform` só no processo do console, roteado apenas pelo domínio do console (ADR-019) |
 | Webhook forjado ou repetido | Assinatura verificada pelo provedor, validade curta, chave única por evento e conferência do valor (ADR-018) |
 
 Cabeçalhos padrão: `Strict-Transport-Security`, `Content-Security-Policy`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` e `frame-ancestors`.
@@ -77,12 +79,12 @@ CORS é fechado por padrão. O storefront usa a mesma origem da API, e os painé
 
 | Requisito | Controle técnico | Fase |
 | --- | --- | --- |
-| Consentimento | Registro com finalidade, versão do texto, data e origem | 7 |
-| Direitos do titular | Fluxo de solicitação com prazo, status e evidências | 7 |
-| Exportação | Geração de arquivo com os dados pessoais do titular | 7 |
-| Exclusão | Remoção ou anonimização, preservando o que a lei exige manter | 7 |
+| Consentimento | Não há comunicação de marketing nem cookies além dos necessários (sessão e carrinho). O registro de consentimento entra com o primeiro uso que dependa dele | Pendente |
+| Direitos do titular | Autoatendimento na conta do cliente, com confirmação de senha e registro na auditoria | 7 |
+| Exportação | Arquivo JSON com cadastro, endereços, pedidos e histórico de acessos | 7 |
+| Exclusão | Conta anonimizada, endereços e carrinho apagados, sessões encerradas; pedidos mantidos como registro fiscal | 7 |
 | Minimização | Eventos e logs sem dados pessoais desnecessários | 2 |
 | Controle de acesso | RBAC e auditoria de acesso a dados pessoais | 4 |
-| Retenção | Política configurável por tipo de dado | 7 |
+| Retenção | Eventos e inbox: 7 dias. E-mails: conteúdo apagado na entrega. Política configurável por tipo de dado: pendente | Parcial |
 
 **Divisão de responsabilidades.** Em geral, cada loja atua como controladora dos dados de seus clientes, e a plataforma como operadora. Para dados da própria operação do SaaS, a plataforma é controladora. Contratos, bases legais, política de privacidade, encarregado e comunicação de incidentes são responsabilidades operacionais e jurídicas que o software não resolve sozinho. Esse enquadramento precisa de validação jurídica.

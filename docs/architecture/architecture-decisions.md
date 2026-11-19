@@ -196,3 +196,41 @@ Cada decisão registra contexto, escolha, consequências e alternativas. Uma dec
 **Consequências.** Integrar um gateway real significa implementar `Provider` (cobrança, estorno e verificação de assinatura), guardar as credenciais da loja com envelope encryption (ADR-014) e validar o fluxo no sandbox do provedor. O critério "fluxo validado no sandbox real" da Fase 6 continua pendente até essa escolha. Notificações aos compradores são exatamente uma por evento no banco. O envio por SMTP é ao menos uma vez, porque um servidor pode aceitar a mensagem e cair antes de responder.
 
 **Alternativas.** Publicar no broker dentro da transação: perde mensagens quando o commit falha. Fila de e-mail no RabbitMQ: colocaria links de acesso no broker sem cifragem e duplicaria o controle de tentativas. Implementar um gateway sem acesso ao sandbox: seria uma integração declarada sem teste real, o que as regras do projeto proíbem.
+
+## ADR-019: Console em processo próprio e loja autônoma no admin
+
+**Contexto.** A Fase 7 exige operar uma loja sem acesso ao banco. A gestão de lojas usa o papel de banco `app_platform`, que lê e altera dados de todas as lojas. Até aqui ele existia só no `tenantctl` (ADR-015).
+
+**Decisão.**
+
+- **Processo próprio.** O console é servido pelo processo `cmd/platform`, com o mesmo código da API, mas o único que recebe a credencial `app_platform`. O edge encaminha para ele apenas o domínio do console. A API das lojas e do admin deixa de registrar `/api/v1/platform`. Assim, uma falha explorada na loja pública não alcança a credencial que atravessa lojas.
+- **Operações do console.** Pelo console, operadores com MFA e as permissões `stores:read` e `stores:manage`:
+  - criam lojas;
+  - suspendem e reativam lojas;
+  - gerenciam domínios e recursos do plano;
+  - convidam a equipe da loja.
+- **Convite por e-mail.** O convite sai por e-mail, gravado na mesma transação da conta. O operador não vê o link.
+- **Auditoria.** Cada ação é atribuída ao operador. O ator `tenantctl` fica reservado à linha de comando.
+- **Autonomia da loja.** A própria equipe altera nome, SEO e tema pelo papel `app_runtime`, com RLS e permissão de coluna. Moeda, idioma, fuso, plano, status e domínios continuam com a plataforma, porque mudá-los afeta preços, cobrança ou roteamento.
+- **Cupons.** Cupons de porcentagem, valor fixo e frete grátis aceitam:
+  - janela de validade;
+  - pedido mínimo;
+  - limite total de usos;
+  - limite de usos por e-mail.
+
+  O último uso é disputado com trava de linha. Um pedido cancelado devolve o uso.
+- **Páginas.** O conteúdo usa um formato de texto próprio (títulos, listas, negrito e links HTTPS ou internos). O formato é convertido em elementos pelo Vue, nunca por `v-html`, para que uma página não carregue HTML nem scripts.
+- **SEO.** `sitemap.xml` e `robots.txt` são gerados por loja a partir da opção de indexação.
+- **LGPD.** O cliente baixa os próprios dados e exclui a conta pela loja, confirmando a senha. A exclusão:
+  - anonimiza a conta;
+  - apaga endereços e carrinho;
+  - encerra as sessões.
+
+  Os pedidos são mantidos com nome e e-mail da compra, como registro fiscal, e desvinculados da conta.
+
+**Consequências.** Um processo a mais para operar, mas com o mesmo binário. Uma loja pode ser criada, configurada e vender sem o `tenantctl` nem o banco, como prova o teste de navegador `administration.spec.ts`. O `tenantctl` continua necessário para convidar o primeiro operador da plataforma.
+
+**Alternativas.**
+
+- Dar `app_platform` à API principal: mais simples, mas qualquer falha na loja pública alcançaria dados de todas as lojas.
+- Expor as operações por funções `SECURITY DEFINER` ao papel da API: dezenas de funções a manter, com o mesmo poder concentrado no mesmo processo.

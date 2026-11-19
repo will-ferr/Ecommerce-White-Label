@@ -20,6 +20,12 @@ tags:
       Catálogo, carrinho, checkout e pedidos da loja do domínio acessado. As rotas de gestão ficam em
       /api/v1/staff e exigem as permissões indicadas. Os corpos são descritos em
       frontend/packages/api-client/src/commerce.ts (ADR-017).
+  - name: Administration
+    description: Configurações, tema, cupons, páginas, relatórios e clientes de uma loja, em /api/v1/staff.
+  - name: Console
+    description: >-
+      Gestão de lojas pelos operadores da plataforma. Servida apenas pelo processo platform, no domínio do
+      console (ADR-019).
   - name: Identity
     description: >-
       Contas e sessões. As mesmas rotas existem em /api/v1/staff para equipes de loja e em
@@ -595,6 +601,315 @@ paths:
         - bearerAuth: []
       responses:
         "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/storefront/sitemap:
+    get:
+      operationId: getSitemap
+      tags: [Commerce]
+      summary: Lista os endereços públicos da loja para o sitemap. Vazio se a loja não for indexável
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/content/pages:
+    get:
+      operationId: listFooterPages
+      tags: [Commerce]
+      summary: Lista as páginas publicadas exibidas no rodapé
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/content/pages/{slug}:
+    get:
+      operationId: getStorePage
+      tags: [Commerce]
+      summary: Consulta uma página publicada. O corpo usa o formato de texto da loja, sem HTML
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/account/privacy/export:
+    get:
+      operationId: exportCustomerData
+      tags: [Commerce]
+      summary: Baixa os dados pessoais do cliente (LGPD art. 18, V)
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/account/privacy/erase:
+    post:
+      operationId: eraseCustomerAccount
+      tags: [Commerce]
+      summary: Exclui a conta do cliente após confirmar a senha. Pedidos são mantidos como registro fiscal
+      security:
+        - bearerAuth: []
+      responses:
+        "204": { description: Concluído }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/store/settings:
+    get:
+      operationId: getStoreSettings
+      tags: [Administration]
+      summary: Consulta nome, SEO, moeda, idioma e fuso da loja (store:manage)
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      operationId: saveStoreSettings
+      tags: [Administration]
+      summary: Altera nome e SEO da loja. Moeda, idioma e fuso são da plataforma (store:manage)
+      security:
+        - bearerAuth: []
+      responses:
+        "204": { description: Concluído }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/store/theme:
+    get:
+      operationId: getStoreTheme
+      tags: [Administration]
+      summary: Consulta o tema em uso, as versões e os valores permitidos (store:manage)
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: publishStoreTheme
+      tags: [Administration]
+      summary: Publica um tema novo. Recusa cores com contraste abaixo de 4,5:1 (store:manage)
+      security:
+        - bearerAuth: []
+      responses:
+        "201": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/store/theme/rollback:
+    post:
+      operationId: rollbackStoreTheme
+      tags: [Administration]
+      summary: Volta a usar uma versão anterior do tema (store:manage)
+      security:
+        - bearerAuth: []
+      responses:
+        "204": { description: Concluído }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/promotions/coupons:
+    get:
+      operationId: listCoupons
+      tags: [Administration]
+      summary: Lista os cupons com o número de usos (promotions:manage)
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createCoupon
+      tags: [Administration]
+      summary: Cria um cupom (promotions:manage)
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/promotions/coupons/{id}:
+    put:
+      operationId: updateCoupon
+      tags: [Administration]
+      summary: Altera um cupom. O código não muda (promotions:manage)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/content/pages:
+    get:
+      operationId: listPages
+      tags: [Administration]
+      summary: Lista as páginas, inclusive rascunhos (content:manage)
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createPage
+      tags: [Administration]
+      summary: Cria uma página (content:manage)
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/content/pages/{id}:
+    put:
+      operationId: updatePage
+      tags: [Administration]
+      summary: Altera uma página. A versão detecta edição concorrente (content:manage)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deletePage
+      tags: [Administration]
+      summary: Exclui uma página (content:manage)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Concluído }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/reports/sales:
+    get:
+      operationId: getSalesReport
+      tags: [Administration]
+      summary: Relatório de vendas pagas por período, no fuso da loja (reports:read)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/customers:
+    get:
+      operationId: listCustomers
+      tags: [Administration]
+      summary: Lista os clientes da loja, sem contas excluídas (customers:read)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/platform/plans:
+    get:
+      operationId: listPlans
+      tags: [Console]
+      summary: Lista os planos (stores:read)
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/platform/stores:
+    get:
+      operationId: listStores
+      tags: [Console]
+      summary: Lista as lojas (stores:read)
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createStore
+      tags: [Console]
+      summary: Cria uma loja com subdomínio, configurações e tema padrão (stores:manage)
+      security:
+        - bearerAuth: []
+      responses:
+        "201": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/platform/stores/{slug}:
+    get:
+      operationId: getStore
+      tags: [Console]
+      summary: Consulta uma loja com domínios e recursos (stores:read)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/platform/stores/{slug}/status:
+    post:
+      operationId: setStoreStatus
+      tags: [Console]
+      summary: Suspende ou reativa uma loja (stores:manage)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Concluído }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/platform/stores/{slug}/domains:
+    post:
+      operationId: addStoreDomain
+      tags: [Console]
+      summary: Adiciona um domínio próprio e devolve o registro TXT de verificação (stores:manage)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "201": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/platform/stores/{slug}/domains/{host}:
+    delete:
+      operationId: removeStoreDomain
+      tags: [Console]
+      summary: Remove um domínio próprio (stores:manage)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+        - { name: host, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Concluído }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/platform/stores/{slug}/domains/{host}/verify:
+    post:
+      operationId: verifyStoreDomain
+      tags: [Console]
+      summary: Verifica o registro TXT do domínio (stores:manage)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+        - { name: host, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Concluído }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/platform/stores/{slug}/features/{key}:
+    put:
+      operationId: setStoreFeature
+      tags: [Console]
+      summary: Liga ou desliga um recurso incluído no plano (stores:manage)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+        - { name: key, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Concluído }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/platform/stores/{slug}/invitations:
+    post:
+      operationId: inviteStoreMember
+      tags: [Console]
+      summary: Convida alguém para a equipe da loja. O convite vai por e-mail (stores:manage)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Convite enviado }
         default: { $ref: "#/components/responses/Error" }
   /health/live:
     get:
