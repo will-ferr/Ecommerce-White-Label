@@ -88,6 +88,13 @@ expect "renovação de sessão recusa outro site" "ORIGIN_NOT_ALLOWED" "$(curl -
 expect "webhook sem assinatura é recusado" "WEBHOOK_SIGNATURE_INVALID" "$(curl -s -X POST -H 'Host: aurora.localhost' -d '{}' "$BASE_URL/api/v1/webhooks/payments/test")"
 expect "webhook de provedor desconhecido não existe" "404" "$(status_of -X POST -H 'Host: aurora.localhost' -d '{}' "$BASE_URL/api/v1/webhooks/payments/desconhecido")"
 
+expect "console exige login para lojas" "AUTHENTICATION_REQUIRED" "$(curl -s -H 'Host: console.localhost' "$BASE_URL/api/v1/platform/stores")"
+expect "API da loja não serve o console" "ROUTE_NOT_FOUND" "$(curl -s -H 'Host: aurora.localhost' "$BASE_URL/api/v1/platform/stores")"
+expect "API da plataforma não serve lojas" "ROUTE_NOT_FOUND" "$(curl -s -H 'Host: console.localhost' "$BASE_URL/api/v1/catalog/products")"
+expect "robots.txt bloqueia loja não indexável" "Disallow: /" "$(curl -s -H 'Host: aurora.localhost' "$BASE_URL/robots.txt")"
+expect "sitemap.xml é XML" "<urlset" "$(curl -s -H 'Host: aurora.localhost' "$BASE_URL/sitemap.xml")"
+if docker compose exec -T platform /app/platform -healthcheck >/dev/null 2>&1; then pass "API da plataforma está saudável"; else fail "API da plataforma está saudável"; fi
+
 if docker compose exec -T worker /app/worker -healthcheck >/dev/null 2>&1; then pass "worker está saudável"; else fail "worker está saudável"; fi
 queues="$(docker compose exec -T rabbitmq rabbitmqctl list_queues --quiet name 2>/dev/null)"
 expect "fila de notificações existe" "sales-notifications" "$queues"

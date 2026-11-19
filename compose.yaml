@@ -50,6 +50,7 @@ services:
     tmpfs: [/tmp]
     depends_on:
       api: { condition: service_healthy }
+      platform: { condition: service_healthy }
       storefront: { condition: service_healthy }
       admin: { condition: service_healthy }
       console: { condition: service_healthy }
@@ -72,6 +73,28 @@ services:
       otel-collector: { condition: service_started }
     healthcheck:
       test: ["CMD", "/app/api", "-healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+  # Serves the platform console API. It is the only service with the platform
+  # database role, and the edge routes only the console host to it (ADR-019).
+  platform:
+    <<: *hardening
+    image: ecommerce-white-label-api
+    pull_policy: never
+    entrypoint: ["/app/platform"]
+    environment:
+      <<: *app-env
+      SERVICE_NAME: ecommerce-platform
+      PLATFORM_DB_USER: app_platform
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?copie .env.example para .env}
+      PLATFORM_BASE_DOMAIN: ${PLATFORM_BASE_DOMAIN:-localhost}
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/app/platform", "-healthcheck"]
       interval: 10s
       timeout: 3s
       retries: 6

@@ -133,6 +133,22 @@ async function seed(slug, catalog) {
       { postalCodeStart: '40000000', postalCodeEnd: '99999999', maxWeightGrams: 10000, price: 4990, minDays: 6, maxDays: 12 },
     ],
   }, accessToken)
+  await call(admin, 'POST', '/staff/promotions/coupons', {
+    code: 'BEMVINDO10', description: '10% na primeira compra', kind: 'percent', value: 10, active: true, perCustomerLimit: 1,
+    minSubtotal: 0, startsAt: null, endsAt: null, usageLimit: null,
+  }, accessToken)
+  for (const page of [
+    {
+      title: 'Política de privacidade', status: 'published', showInFooter: true,
+      body: '## Quais dados usamos\n\nNome, e-mail e endereço de entrega, para processar seus pedidos.\n\n## Seus direitos\n\n- Baixar uma cópia dos seus dados em **Minha conta**\n- Excluir sua conta a qualquer momento\n\nOs pedidos são mantidos pelo prazo exigido pela legislação fiscal.',
+    },
+    {
+      title: 'Trocas e devoluções', status: 'published', showInFooter: true,
+      body: 'Você pode desistir da compra em até **7 dias** após o recebimento, conforme o Código de Defesa do Consumidor.',
+    },
+  ]) {
+    await call(admin, 'POST', '/staff/content/pages', { ...page, seoDescription: '', slug: '' }, accessToken)
+  }
   console.log(`Catálogo de ${slug} criado. Painel: http://admin.localhost:8080 (loja ${slug}, ${email}, senha ${password})`)
 }
 
