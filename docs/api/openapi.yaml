@@ -15,6 +15,11 @@ tags:
     description: Estado da plataforma
   - name: Storefront
     description: Configuração pública das lojas
+  - name: Commerce
+    description: >-
+      Catálogo, carrinho, checkout e pedidos da loja do domínio acessado. As rotas de gestão ficam em
+      /api/v1/staff e exigem as permissões indicadas. Os corpos são descritos em
+      frontend/packages/api-client/src/commerce.ts (ADR-017).
   - name: Identity
     description: >-
       Contas e sessões. As mesmas rotas existem em /api/v1/staff para equipes de loja e em
@@ -334,6 +339,225 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+  /api/v1/catalog/categories:
+    get:
+      operationId: listStoreCategories
+      tags: [Commerce]
+      summary: Lista as categorias ativas da loja
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/catalog/products:
+    get:
+      operationId: listStoreProducts
+      tags: [Commerce]
+      summary: Lista produtos ativos, com busca, categoria, destaque e paginação por cursor
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: featured, in: query, schema: { type: boolean } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/catalog/products/{slug}:
+    get:
+      operationId: getStoreProduct
+      tags: [Commerce]
+      summary: Consulta um produto ativo. Custo e saldo de estoque não são expostos
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/cart:
+    get:
+      operationId: getCart
+      tags: [Commerce]
+      summary: Consulta o carrinho do comprador ou do visitante (cookie wl_cart)
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/cart/items:
+    post:
+      operationId: addCartItem
+      tags: [Commerce]
+      summary: Adiciona uma variante ao carrinho
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/cart/items/{variantId}:
+    parameters:
+      - { name: variantId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: changeCartItem
+      tags: [Commerce]
+      summary: Altera a quantidade de uma variante
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: removeCartItem
+      tags: [Commerce]
+      summary: Remove uma variante do carrinho
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/cart/merge:
+    post:
+      operationId: mergeCart
+      tags: [Commerce]
+      summary: Junta o carrinho do visitante ao do comprador após o login
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/summary:
+    post:
+      operationId: checkoutSummary
+      tags: [Commerce]
+      summary: Calcula itens, frete e total no servidor
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/checkout/orders:
+    post:
+      operationId: placeOrder
+      tags: [Commerce]
+      summary: Cria o pedido e reserva o estoque
+      description: >-
+        Exige o cabeçalho Idempotency-Key. Repetições com a mesma chave devolvem o mesmo pedido.
+        Se preço ou estoque mudaram, responde 409 com PRICE_CHANGED ou OUT_OF_STOCK e o resumo atualizado.
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      responses:
+        "201": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/orders/{number}:
+    get:
+      operationId: getCustomerOrder
+      tags: [Commerce]
+      summary: Consulta um pedido pelo token do pedido ou pela sessão do comprador
+      parameters:
+        - { name: number, in: path, required: true, schema: { type: integer } }
+        - { name: token, in: query, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/orders/{number}/test-payment:
+    post:
+      operationId: confirmTestPayment
+      tags: [Commerce]
+      summary: Aprova ou recusa o Pagamento de teste. Existe só com PAYMENTS_TEST_PROVIDER habilitado
+      parameters:
+        - { name: number, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/account/orders:
+    get:
+      operationId: listAccountOrders
+      tags: [Commerce]
+      summary: Lista os pedidos do comprador
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/account/addresses:
+    get:
+      operationId: listAddresses
+      tags: [Commerce]
+      summary: Lista os endereços do comprador
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: addAddress
+      tags: [Commerce]
+      summary: Salva um endereço
+      security:
+        - bearerAuth: []
+      responses:
+        "201": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/account/addresses/{id}:
+    delete:
+      operationId: deleteAddress
+      tags: [Commerce]
+      summary: Remove um endereço
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Removido }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/catalog/products:
+    get:
+      operationId: listAdminProducts
+      tags: [Commerce]
+      summary: Lista produtos da loja (catalog:read). Também existem /{id} (GET, PUT) e /catalog/categories
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createProduct
+      tags: [Commerce]
+      summary: Cria um produto com variantes (catalog:manage)
+      security:
+        - bearerAuth: []
+      responses:
+        "201": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/inventory/adjustments:
+    post:
+      operationId: adjustStock
+      tags: [Commerce]
+      summary: Ajusta o saldo de uma variante com motivo (inventory:manage)
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/orders:
+    get:
+      operationId: listAdminOrders
+      tags: [Commerce]
+      summary: Lista pedidos com filtros (orders:read). /orders/export devolve CSV
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/orders/{id}/status:
+    post:
+      operationId: changeOrderStatus
+      tags: [Commerce]
+      summary: Avança ou cancela um pedido segundo a máquina de estados (orders:manage)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/staff/shipping/methods:
+    get:
+      operationId: listShippingMethods
+      tags: [Commerce]
+      summary: Lista as opções de frete (orders:read). POST e PUT exigem shipping:manage
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
   /health/live:
     get:
       operationId: getLiveness
@@ -374,6 +598,20 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  responses:
+    CommerceObject:
+      description: Sucesso. O formato está em frontend/packages/api-client/src/commerce.ts
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    Error:
+      description: Erro
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
   schemas:
     SystemState:
       type: string

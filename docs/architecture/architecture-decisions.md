@@ -158,3 +158,21 @@ Cada decisão registra contexto, escolha, consequências e alternativas. Uma dec
 **Consequências.** O RLS isola operadores das lojas sem código duplicado. Um token só é aceito no portal para o qual foi emitido. A leitura global entre lojas continua restrita ao papel `app_platform` e será exposta no console da Fase 7.
 
 **Alternativas.** Tabelas separadas para operadores: duplicariam sessões, tokens, MFA e consultas sem ganho de isolamento.
+
+## ADR-017: Núcleo comercial em três módulos e pagamento de teste explícito
+
+**Contexto.** A Fase 5 entrega catálogo, estoque, carrinho, checkout, pedidos e endereços. O modelo da Fase 1 previa um módulo por contexto e tabelas de listas de preço, marcas e depósitos múltiplos. Ainda não existe gateway real, que chega na Fase 6.
+
+**Decisão.**
+
+- Três módulos Go: `catalog` (produtos, variantes, categorias, preços), `inventory` (saldos, reservas, movimentações) e `sales` (carrinho, checkout, pedidos, pagamentos, frete e endereços). Cada contexto de `sales` tem schema próprio no banco (`cart`, `checkout`, `orders`, `payments`, `shipping`, `customers`), o que permite separar o módulo depois sem migrar dados.
+- O preço fica na variante, com histórico em `catalog.price_history`. Listas de preço, preços por quantidade e por grupo entram quando houver promoções na Fase 7.
+- Um depósito padrão por loja. A reserva é um `UPDATE` condicional sob `CHECK (reserved <= on_hand)`, com as variantes travadas em ordem fixa para evitar deadlock. Reserva, pedido, pagamento e chave de idempotência são gravados na mesma transação.
+- O checkout recalcula preços, estoque e frete no servidor. Se algo mudou desde a última revisão, devolve `PRICE_CHANGED` ou `OUT_OF_STOCK` com o novo resumo, sem criar o pedido.
+- Pagamentos passam por uma interface `Provider`. A única implementação é o **Pagamento de teste**, exibido com esse nome ao comprador e à equipe, habilitado por `PAYMENTS_TEST_PROVIDER` e recusado pela configuração de produção.
+- Pedidos de visitantes são consultados por um token HMAC derivado de `AUTH_SIGNING_KEY`, sem senha. Pedidos não pagos expiram por uma rotina com advisory lock, para rodar em uma instância por vez.
+- Os tipos de comércio do cliente TypeScript são escritos à mão em `commerce.ts` e verificados pelos testes E2E. O OpenAPI documenta as rotas, mas o gerador cobre só identidade e loja.
+
+**Consequências.** Uma compra completa funciona de ponta a ponta sem simular um gateway real. A troca pelo gateway da Fase 6 implementa `Provider` e passa o estorno para o fluxo assíncrono. Impostos ficam zerados e identificados como "não calculados" até existir configuração fiscal validada.
+
+**Alternativas.** Um módulo por contexto já na Fase 5: mais fronteiras e transações distribuídas antes de qualquer necessidade de implantação separada. Simular respostas de um gateway real: violaria a regra de não apresentar dados simulados como funcionalidade real.

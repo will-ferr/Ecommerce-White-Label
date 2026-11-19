@@ -319,6 +319,23 @@ erDiagram
 
 O número do pedido é sequencial por loja, gerado por um contador `(tenant_id, next_number)` dentro da transação do checkout.
 
+### Implementado na Fase 5
+
+Os diagramas acima são o modelo-alvo. A migration `00004_commerce.sql` implementa o subconjunto abaixo (ADR-017), todas as tabelas com `tenant_id` na chave, chaves estrangeiras compostas e RLS forçado.
+
+| Schema | Tabelas | Observações |
+| --- | --- | --- |
+| `catalog` | `categories`, `products`, `product_images`, `variants`, `price_history` | Preço, preço comparativo e custo ficam na variante. Variantes vendidas são arquivadas, nunca apagadas |
+| `inventory` | `warehouses`, `stock_levels`, `reservations`, `movements` | Um depósito padrão por loja. `CHECK (reserved <= on_hand)` e movimentações somente inclusão |
+| `shipping` | `methods` | Retirada ou valor fixo por loja, com prazo mínimo e máximo em dias |
+| `cart` | `carts`, `items` | Carrinho de visitante identificado pelo hash de um token em cookie |
+| `orders` | `counters`, `orders`, `items`, `status_history`, `notes` | Snapshots de nome, SKU, preço e endereço. Notas internas visíveis só para a equipe |
+| `payments` | `payments`, `transactions` | Provedor, status e valor. Sem dados de cartão |
+| `checkout` | `idempotency_keys` | Resposta gravada na mesma transação do pedido |
+| `customers` | `addresses` | Catálogo de endereços do comprador |
+
+Ainda não existem: marcas, listas de preço, mídia além de URLs de imagem, CPF cifrado, remessas com eventos de rastreio (o código de rastreio fica no pedido) e reembolsos parciais.
+
 ## 5. Tabelas transversais
 
 | Tabela | Função | Restrição principal |

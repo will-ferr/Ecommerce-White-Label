@@ -13,7 +13,11 @@ docker compose up -d --build --wait
 bash scripts/seed-dev.sh
 ```
 
-O segundo comando cria duas lojas de demonstração e pode ser repetido sem efeito colateral.
+O último comando cria duas lojas de demonstração, cada uma com categorias, produtos, estoque e opções de frete, e pode ser repetido sem efeito colateral. Na primeira execução, ele mostra o e-mail e a senha aleatória da equipe de demonstração de cada loja, para entrar no admin.
+
+### Compra de demonstração
+
+O ambiente local usa o **Pagamento de teste**, identificado como tal no checkout e no pedido: nenhum valor é cobrado. Na página do pedido, o comprador aprova ou recusa o pagamento. No admin da loja, a equipe acompanha o pedido em **Pedidos** e avança a separação e o envio. Um pedido não pago é cancelado automaticamente após `ORDER_PAYMENT_TTL`, e o estoque reservado volta a ficar disponível.
 
 | Serviço | Endereço |
 | --- | --- |
@@ -43,7 +47,7 @@ bash scripts/smoke.sh
 
 O script confere a API, as três aplicações, os cabeçalhos de segurança e a chegada de métricas, logs e traces.
 
-Para conferir em um navegador real a identidade visual de cada loja:
+Para conferir em um navegador real a identidade de cada loja, a compra completa e o atendimento do pedido:
 
 ```bash
 cd frontend
@@ -130,6 +134,7 @@ Em `staging` e `production`, a API também exige:
 - `REDIS_TLS=true` e `REDIS_PASSWORD` preenchido.
 - `TELEMETRY_OTLP_INSECURE=false`.
 - `AUTH_COOKIE_SECURE=true`, `RATE_LIMIT_ENABLED=true`, `SMTP_REQUIRE_TLS=true` e `STORE_PUBLIC_SCHEME=https`.
+- `PAYMENTS_TEST_PROVIDER=false` em `production`.
 - Chaves diferentes das chaves de exemplo do `.env.example`.
 
 A API também recusa iniciar se o usuário do banco for superusuário ou tiver `BYPASSRLS`.
@@ -161,6 +166,9 @@ A API também recusa iniciar se o usuário do banco for superusuário ou tiver `
 | `SMTP_REQUIRE_TLS` | `true` | Exige TLS no envio de e-mail |
 | `REDIS_ADDR` | obrigatória | Endereço do Redis |
 | `REDIS_PASSWORD`, `REDIS_TLS` | vazia, `false` | Acesso ao Redis |
+| `PAYMENTS_TEST_PROVIDER` | `false` | Habilita o Pagamento de teste. Proibido em produção |
+| `ORDER_PAYMENT_TTL` | `30m` | Prazo para pagar antes do cancelamento automático |
+| `ORDER_EXPIRY_INTERVAL` | `30s` | Intervalo da rotina que cancela pedidos vencidos |
 | `TELEMETRY_ENABLED` | `true` | Liga a exportação de telemetria |
 | `TELEMETRY_OTLP_ENDPOINT` | `otel-collector:4317` | Destino OTLP |
 | `TELEMETRY_OTLP_INSECURE` | `false` | Permite OTLP sem TLS |
