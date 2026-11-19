@@ -40,6 +40,8 @@ const usage = `Uso: tenantctl <recurso> <ação> [opções]
   feature set     --slug S --key K --enabled true|false
   theme publish   --slug S --file arquivo.json
   theme rollback  --slug S --version N
+  staff invite    --slug S --email E --name N [--role owner|manager|support|viewer]
+  operator invite --email E --name N [--role platform_admin|platform_support]
 `
 
 // Runner executes operator commands.

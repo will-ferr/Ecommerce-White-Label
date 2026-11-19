@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,9 +13,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/audit"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/tenants/internal/adapters/postgres/sqlcgen"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/tenants/internal/app"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/tenants/internal/domain"
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/tenancy"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/apperr"
 )
 
@@ -30,8 +33,17 @@ func NewPlatformStore(pool *pgxpool.Pool) *PlatformStore {
 	return &PlatformStore{pool: pool}
 }
 
-func (s *PlatformStore) inTx(ctx context.Context, fn func(*sqlcgen.Queries) error) error {
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return fn(sqlcgen.New(tx)) })
+// audited runs fn and records the operator action in the same transaction.
+func (s *PlatformStore) audited(ctx context.Context, action, target string, metadata map[string]string, fn func(*sqlcgen.Queries) error) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := fn(sqlcgen.New(tx)); err != nil {
+			return err
+		}
+		return audit.Record(ctx, tx, audit.Entry{
+			TenantID: tenancy.PlatformTenantID, ActorType: audit.ActorOperator, ActorID: "tenantctl",
+			Action: action, TargetType: "tenant", TargetID: target, Metadata: metadata,
+		})
+	})
 }
 
 func tenantNotFound() error {
@@ -73,7 +85,7 @@ func (s *PlatformStore) CreateTenant(ctx context.Context, tenant app.NewTenant) 
 		return fmt.Errorf("encode theme: %w", err)
 	}
 
-	err = s.inTx(ctx, func(q *sqlcgen.Queries) error {
+	err = s.audited(ctx, "tenants.tenant.created", tenant.Slug, map[string]string{"plan": tenant.PlanCode}, func(q *sqlcgen.Queries) error {
 		planID, err := q.GetPlanIDByCode(ctx, tenant.PlanCode)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return apperr.New(apperr.KindInvalid, "PLAN_NOT_FOUND", "The plan does not exist.")
@@ -135,19 +147,21 @@ func (s *PlatformStore) ListTenants(ctx context.Context) ([]app.TenantSummary, e
 
 // SetTenantStatus implements app.AdminStore.
 func (s *PlatformStore) SetTenantStatus(ctx context.Context, slug, status string) error {
-	affected, err := sqlcgen.New(s.pool).SetTenantStatus(ctx, sqlcgen.SetTenantStatusParams{Slug: slug, Status: status})
-	if err != nil {
-		return fmt.Errorf("set tenant status: %w", err)
-	}
-	if affected == 0 {
-		return tenantNotFound()
-	}
-	return nil
+	return s.audited(ctx, "tenants.tenant.status_changed", slug, map[string]string{"status": status}, func(q *sqlcgen.Queries) error {
+		affected, err := q.SetTenantStatus(ctx, sqlcgen.SetTenantStatusParams{Slug: slug, Status: status})
+		if err != nil {
+			return fmt.Errorf("set tenant status: %w", err)
+		}
+		if affected == 0 {
+			return tenantNotFound()
+		}
+		return nil
+	})
 }
 
 // AddCustomDomain implements app.AdminStore.
 func (s *PlatformStore) AddCustomDomain(ctx context.Context, slug, host, token string) error {
-	err := s.inTx(ctx, func(q *sqlcgen.Queries) error {
+	err := s.audited(ctx, "tenants.domain.added", slug, map[string]string{"host": host}, func(q *sqlcgen.Queries) error {
 		tenant, err := lockTenant(ctx, q, slug)
 		if err != nil {
 			return err
@@ -180,24 +194,28 @@ func (s *PlatformStore) Domain(ctx context.Context, host string) (app.DomainReco
 
 // MarkDomainVerified implements app.AdminStore.
 func (s *PlatformStore) MarkDomainVerified(ctx context.Context, host string) error {
-	return sqlcgen.New(s.pool).MarkDomainVerified(ctx, host)
+	return s.audited(ctx, "tenants.domain.verified", host, nil, func(q *sqlcgen.Queries) error {
+		return q.MarkDomainVerified(ctx, host)
+	})
 }
 
 // RemoveCustomDomain implements app.AdminStore.
 func (s *PlatformStore) RemoveCustomDomain(ctx context.Context, host string) error {
-	affected, err := sqlcgen.New(s.pool).DeleteCustomDomain(ctx, host)
-	if err != nil {
-		return fmt.Errorf("delete domain: %w", err)
-	}
-	if affected == 0 {
-		return domainNotFound()
-	}
-	return nil
+	return s.audited(ctx, "tenants.domain.removed", host, nil, func(q *sqlcgen.Queries) error {
+		affected, err := q.DeleteCustomDomain(ctx, host)
+		if err != nil {
+			return fmt.Errorf("delete domain: %w", err)
+		}
+		if affected == 0 {
+			return domainNotFound()
+		}
+		return nil
+	})
 }
 
 // UpdateSettings implements app.AdminStore.
 func (s *PlatformStore) UpdateSettings(ctx context.Context, slug string, change func(domain.Settings) (domain.Settings, error)) error {
-	return s.inTx(ctx, func(q *sqlcgen.Queries) error {
+	return s.audited(ctx, "tenants.settings.updated", slug, nil, func(q *sqlcgen.Queries) error {
 		tenant, err := lockTenant(ctx, q, slug)
 		if err != nil {
 			return err
@@ -223,7 +241,8 @@ func (s *PlatformStore) UpdateSettings(ctx context.Context, slug string, change 
 
 // SetFeature implements app.AdminStore.
 func (s *PlatformStore) SetFeature(ctx context.Context, slug, key string, enabled bool) error {
-	return s.inTx(ctx, func(q *sqlcgen.Queries) error {
+	metadata := map[string]string{"feature": key, "enabled": strconv.FormatBool(enabled)}
+	return s.audited(ctx, "tenants.feature.changed", slug, metadata, func(q *sqlcgen.Queries) error {
 		tenant, err := lockTenant(ctx, q, slug)
 		if err != nil {
 			return err
@@ -251,7 +270,7 @@ func (s *PlatformStore) PublishTheme(ctx context.Context, slug string, theme dom
 	}
 
 	var version int32
-	err = s.inTx(ctx, func(q *sqlcgen.Queries) error {
+	err = s.audited(ctx, "tenants.theme.published", slug, nil, func(q *sqlcgen.Queries) error {
 		tenant, err := lockTenant(ctx, q, slug)
 		if err != nil {
 			return err
@@ -275,7 +294,8 @@ func (s *PlatformStore) PublishTheme(ctx context.Context, slug string, theme dom
 
 // RollbackTheme implements app.AdminStore.
 func (s *PlatformStore) RollbackTheme(ctx context.Context, slug string, version int32) error {
-	return s.inTx(ctx, func(q *sqlcgen.Queries) error {
+	metadata := map[string]string{"version": strconv.Itoa(int(version))}
+	return s.audited(ctx, "tenants.theme.rolled_back", slug, metadata, func(q *sqlcgen.Queries) error {
 		tenant, err := lockTenant(ctx, q, slug)
 		if err != nil {
 			return err

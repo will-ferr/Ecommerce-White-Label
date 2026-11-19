@@ -4,11 +4,13 @@ package app
 import (
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/authz"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/health"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/httpx"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/middleware"
@@ -22,15 +24,28 @@ type RouterDeps struct {
 	RequestTimeout time.Duration
 	MaxBodyBytes   int64
 	HSTS           bool
+	TrustedProxies []netip.Prefix
 	// RegisterAPI adds the routes of the business modules under /api/v1.
 	RegisterAPI func(chi.Router)
 }
 
-// NewRouter builds the HTTP handler with its middleware chain.
+// NewRouter builds the instrumented HTTP handler.
 func NewRouter(deps RouterDeps) http.Handler {
+	// Every route is public, so trace context sent by clients only becomes a
+	// span link. server.address is fixed so tenant hosts never become metric labels.
+	return otelhttp.NewHandler(NewRoutes(deps), "http.server",
+		otelhttp.WithPublicEndpointFn(func(*http.Request) bool { return true }),
+		otelhttp.WithServerName("ecommerce-api"),
+		otelhttp.WithFilter(middleware.IsTraced),
+	)
+}
+
+// NewRoutes builds the route tree with its middleware chain.
+func NewRoutes(deps RouterDeps) chi.Router {
 	router := chi.NewRouter()
 	router.Use(
 		middleware.Correlation,
+		middleware.ClientIP(deps.TrustedProxies),
 		middleware.RouteTelemetry,
 		middleware.AccessLog(deps.Logger),
 		middleware.Recover(deps.Logger),
@@ -51,17 +66,11 @@ func NewRouter(deps RouterDeps) http.Handler {
 	router.Get("/health/ready", deps.Health.Ready)
 
 	router.Route("/api/v1", func(api chi.Router) {
-		api.Get("/status", deps.Health.Public)
+		api.Method(http.MethodGet, "/status", authz.Protect(deps.Logger, authz.Public, deps.Health.Public))
 		if deps.RegisterAPI != nil {
 			deps.RegisterAPI(api)
 		}
 	})
 
-	// Every route is public, so trace context sent by clients only becomes a
-	// span link. server.address is fixed so tenant hosts never become metric labels.
-	return otelhttp.NewHandler(router, "http.server",
-		otelhttp.WithPublicEndpointFn(func(*http.Request) bool { return true }),
-		otelhttp.WithServerName("ecommerce-api"),
-		otelhttp.WithFilter(middleware.IsTraced),
-	)
+	return router
 }

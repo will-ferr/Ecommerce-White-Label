@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	identitycli "github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/identity/cli"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/tenants/cli"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/config"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/database"
@@ -38,7 +39,11 @@ func run() error {
 	}
 	defer pool.Close()
 
-	return cli.NewRunner(pool, cfg.BaseDomain, os.Stdout).Run(ctx, os.Args[1:])
+	args := os.Args[1:]
+	if identitycli.Handles(args) {
+		return identitycli.NewRunner(pool, cfg.AdminURL, cfg.ConsoleURL, os.Stdout).Run(ctx, args)
+	}
+	return cli.NewRunner(pool, cfg.BaseDomain, os.Stdout).Run(ctx, args)
 }
 
 func describe(err error) string {

@@ -12,6 +12,7 @@ import (
 	tenanthttp "github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/tenants/internal/adapters/http"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/tenants/internal/adapters/postgres"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/tenants/internal/app"
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/authz"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/database"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/httpx"
 )
@@ -40,5 +41,6 @@ func (m *Module) RequireTenant() func(http.Handler) http.Handler {
 
 // RegisterStorefrontRoutes adds the routes that run inside a store context.
 func (m *Module) RegisterStorefrontRoutes(router chi.Router) {
-	router.Get("/storefront/config", httpx.Handle(m.logger, m.storefront.Config))
+	router.Method(http.MethodGet, "/storefront/config",
+		authz.Protect(m.logger, authz.Public, httpx.Handle(m.logger, m.storefront.Config)))
 }

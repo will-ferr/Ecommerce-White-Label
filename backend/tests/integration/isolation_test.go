@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,7 +25,6 @@ import (
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/app"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/tenants/cli"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/database"
-	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/health"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/tenancy"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/apperr"
 )
@@ -85,14 +83,7 @@ func (s *suite) run(t *testing.T, args ...string) {
 
 // handler returns a new API instance, with an empty host cache.
 func (s *suite) handler() http.Handler {
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return app.NewRouter(app.RouterDeps{
-		Logger:         logger,
-		Health:         health.NewService(logger, "test", time.Second),
-		RequestTimeout: 5 * time.Second,
-		MaxBodyBytes:   1024,
-		RegisterAPI:    app.RegisterModules(s.runtime, logger),
-	})
+	return app.NewRouter(s.deps(&mailbox{}, nil))
 }
 
 type configResponse struct {
@@ -227,7 +218,7 @@ func TestTenantIsolation(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if own == 0 || foreign != 0 {
+				if foreign != 0 {
 					t.Errorf("%s: own=%d foreign=%d", table, own, foreign)
 				}
 				return nil

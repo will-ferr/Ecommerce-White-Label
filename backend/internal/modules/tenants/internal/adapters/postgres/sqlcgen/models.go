@@ -11,6 +11,20 @@ import (
 	"github.com/google/uuid"
 )
 
+type AuditEntry struct {
+	TenantID   uuid.UUID
+	ID         uuid.UUID
+	ActorType  string
+	ActorID    string
+	Action     string
+	TargetType string
+	TargetID   string
+	Ip         string
+	TraceID    string
+	Metadata   json.RawMessage
+	OccurredAt time.Time
+}
+
 type CoreFeatureFlag struct {
 	Key         string
 	Description string
@@ -71,5 +85,106 @@ type CoreThemeVersion struct {
 	Version   int32
 	Status    string
 	Tokens    json.RawMessage
+	CreatedAt time.Time
+}
+
+type IdentityAccessEvent struct {
+	TenantID   uuid.UUID
+	ID         uuid.UUID
+	UserID     *uuid.UUID
+	Realm      string
+	Event      string
+	Device     string
+	Ip         string
+	OccurredAt time.Time
+}
+
+type IdentityMfaChallenge struct {
+	TenantID   uuid.UUID
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	TokenHash  []byte
+	Attempts   int32
+	ExpiresAt  time.Time
+	ConsumedAt *time.Time
+}
+
+type IdentityPermission struct {
+	Code        string
+	Description string
+}
+
+type IdentityRecoveryCode struct {
+	TenantID uuid.UUID
+	ID       uuid.UUID
+	UserID   uuid.UUID
+	CodeHash []byte
+	UsedAt   *time.Time
+}
+
+type IdentityRefreshToken struct {
+	TenantID  uuid.UUID
+	ID        uuid.UUID
+	SessionID uuid.UUID
+	TokenHash []byte
+	CreatedAt time.Time
+	UsedAt    *time.Time
+}
+
+type IdentityRole struct {
+	Code  string
+	Realm string
+	Name  string
+	Rank  int32
+}
+
+type IdentityRolePermission struct {
+	RoleCode       string
+	PermissionCode string
+}
+
+type IdentitySession struct {
+	TenantID      uuid.UUID
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	DeviceLabel   string
+	Ip            string
+	CreatedAt     time.Time
+	LastUsedAt    time.Time
+	ExpiresAt     time.Time
+	RevokedAt     *time.Time
+	RevokedReason *string
+}
+
+type IdentityUser struct {
+	TenantID           uuid.UUID
+	ID                 uuid.UUID
+	Realm              string
+	Email              string
+	Name               string
+	PasswordHash       *string
+	Status             string
+	EmailVerifiedAt    *time.Time
+	MfaSecretEncrypted []byte
+	MfaEnabledAt       *time.Time
+	MfaLastStep        int64
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+type IdentityUserRole struct {
+	TenantID uuid.UUID
+	UserID   uuid.UUID
+	RoleCode string
+}
+
+type IdentityUserToken struct {
+	TenantID  uuid.UUID
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	Kind      string
+	TokenHash []byte
+	ExpiresAt time.Time
+	UsedAt    *time.Time
 	CreatedAt time.Time
 }
