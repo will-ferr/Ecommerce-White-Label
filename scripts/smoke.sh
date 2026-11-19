@@ -80,6 +80,11 @@ eventually "trace chega ao Tempo" has_trace
 eventually "trace contém a consulta ao banco" has_db_span
 eventually "log chega ao Loki" has_log
 
+expect "rota protegida exige login" "AUTHENTICATION_REQUIRED" "$(curl -s -H 'Host: aurora.localhost' "$BASE_URL/api/v1/auth/me")"
+expect "equipe exige login" "AUTHENTICATION_REQUIRED" "$(curl -s -H 'Host: admin.localhost' "$BASE_URL/api/v1/staff/team")"
+expect "console exige login" "AUTHENTICATION_REQUIRED" "$(curl -s -H 'Host: console.localhost' "$BASE_URL/api/v1/platform/audit")"
+expect "renovação de sessão recusa outro site" "ORIGIN_NOT_ALLOWED" "$(curl -s -X POST -H 'Host: aurora.localhost' -H 'Origin: https://evil.test' "$BASE_URL/api/v1/auth/refresh")"
+
 labels="$(curl -s -G http://127.0.0.1:9090/api/v1/series --data-urlencode 'match[]=http_server_request_duration_seconds_count')"
 if [[ "$labels" == *"aurora"* || "$labels" == *"terra"* ]]; then fail "host do tenant virou rótulo de métrica"; else pass "host do tenant não vira rótulo de métrica"; fi
 

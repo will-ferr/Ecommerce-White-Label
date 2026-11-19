@@ -47,8 +47,20 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?copie .env.example para .env}
       TELEMETRY_OTLP_ENDPOINT: otel-collector:4317
       TELEMETRY_OTLP_INSECURE: "true"
+      AUTH_SIGNING_KEY: ${AUTH_SIGNING_KEY:?copie .env.example para .env}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?copie .env.example para .env}
+      AUTH_COOKIE_SECURE: "false"
+      TRUSTED_PROXIES: 172.16.0.0/12,192.168.0.0/16
+      STORE_PUBLIC_SCHEME: http
+      STORE_PUBLIC_PORT: "8080"
+      ADMIN_PUBLIC_URL: http://admin.localhost:8080
+      CONSOLE_PUBLIC_URL: http://console.localhost:8080
+      SMTP_ADDR: mailpit:1025
+      SMTP_FROM: nao-responda@plataforma.localhost
+      SMTP_REQUIRE_TLS: "false"
     depends_on:
       migrate: { condition: service_completed_successfully }
+      mailpit: { condition: service_started }
       redis: { condition: service_healthy }
       otel-collector: { condition: service_started }
     healthcheck:
@@ -96,10 +108,9 @@ services:
   # Operator tool: docker compose run --rm tenantctl tenant list
   tenantctl:
     profiles: [tools]
-    build:
-      context: ./backend
-      args:
-        VERSION: 0.1.0-dev
+    # Same image as the API, so the tool is never older than the running code.
+    image: ecommerce-white-label-api
+    pull_policy: never
     entrypoint: ["/app/tenantctl"]
     read_only: true
     cap_drop: [ALL]
@@ -109,6 +120,8 @@ services:
       PLATFORM_DB_USER: app_platform
       PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?copie .env.example para .env}
       PLATFORM_BASE_DOMAIN: ${PLATFORM_BASE_DOMAIN:-localhost}
+      ADMIN_PUBLIC_URL: http://admin.localhost:8080
+      CONSOLE_PUBLIC_URL: http://console.localhost:8080
     volumes:
       - ./deployments/compose/seed:/seed:ro
     depends_on:
@@ -187,6 +200,12 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
+
+  # Captures development e-mail: nothing leaves this environment.
+  mailpit:
+    image: axllent/mailpit:v1.34.0
+    restart: unless-stopped
+    ports: ["127.0.0.1:8025:8025"]
 
   rabbitmq:
     image: rabbitmq:4.4.1-management-alpine
