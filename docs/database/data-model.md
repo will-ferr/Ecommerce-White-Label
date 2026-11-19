@@ -18,7 +18,7 @@ Modelo inicial do núcleo. As colunas completas serão definidas nas migrations 
 | Índices | Sempre iniciados por `tenant_id`; paginação por cursor `(tenant_id, created_at, id)` |
 | Isolamento | RLS habilitado e forçado em toda tabela com `tenant_id` |
 
-Tabelas **globais**, sem `tenant_id`: `core.plans`, `core.feature_flags`, `core.plan_features`, `identity.platform_users`, `identity.permissions`. A tabela `core.tenants` também usa RLS: cada loja lê somente a própria linha.
+Tabelas **globais**, sem `tenant_id`: `core.plans`, `core.feature_flags`, `core.plan_features`, `identity.permissions`, `identity.roles`, `identity.role_permissions`. A tabela `core.tenants` também usa RLS: cada loja lê somente a própria linha.
 
 ## 2. Plataforma e identidade
 
@@ -95,7 +95,7 @@ erDiagram
     }
 ```
 
-`users.realm` separa equipe (`staff`) e compradores (`customer`), com e-mail único por `(tenant_id, realm)`. Usuários da plataforma ficam em `identity.platform_users`, em outra tabela e com outro fluxo de login.
+`users.realm` separa compradores (`customer`), equipes de loja (`staff`) e operadores (`platform`), com e-mail único por `(tenant_id, realm)`. Operadores pertencem a um tenant reservado, sem domínio (ADR-016).
 
 ## 3. Catálogo, estoque e preços
 
@@ -327,7 +327,7 @@ O número do pedido é sequencial por loja, gerado por um contador `(tenant_id, 
 | `messaging.inbox` | Eventos já consumidos | PK `(consumer, event_id)` |
 | `core.idempotency_keys` | Respostas de operações críticas | Única em `(tenant_id, scope, key)` |
 | `payments.webhook_events` | Webhooks brutos recebidos | Única em `(tenant_id, provider, provider_event_id)` |
-| `audit.entries` | Trilha administrativa, somente inclusão | Particionada por mês |
+| `audit.entries` | Trilha administrativa, somente inclusão | Nenhum papel da aplicação pode alterar ou apagar registros |
 | `privacy.consents` | Consentimentos LGPD com finalidade e versão | Somente inclusão |
 
 ## 6. Índices iniciais
@@ -352,6 +352,6 @@ Novos índices serão adicionados com base em `EXPLAIN ANALYZE` e `pg_stat_state
 | Recuperação | PITR com metas iniciais de RPO de 5 minutos e RTO de 1 hora |
 | Prova de restauração | Teste periódico automatizado; meta só vale depois de medida |
 | Restauração de um tenant | Restaurar em ambiente isolado e copiar as linhas do tenant, com procedimento documentado |
-| Particionamento | Apenas `audit.entries` no início; outras tabelas com evidência de volume |
+| Particionamento | Adotado somente com evidência de volume, começando por `audit.entries` |
 | Migrations | Compatíveis com a versão anterior (expandir, migrar, contrair) |
 | Leitura | Réplicas para relatórios quando houver carga comprovada |

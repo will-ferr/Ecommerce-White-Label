@@ -22,6 +22,7 @@ O segundo comando cria duas lojas de demonstração e pode ser repetido sem efei
 | Admin da loja | <http://admin.localhost:8080> |
 | Console da plataforma | <http://console.localhost:8080> |
 | API | <http://localhost:8080/api/v1/status> |
+| E-mails de desenvolvimento (Mailpit) | <http://localhost:8025> |
 | Grafana (usuário `admin`, senha em `.env`) | <http://localhost:3000> |
 | Prometheus | <http://localhost:9090> |
 | RabbitMQ (usuário `ecommerce`, senha em `.env`) | <http://localhost:15672> |
@@ -75,6 +76,19 @@ docker compose run --rm tenantctl domain verify --host www.minhaloja.com.br
 
 Os arquivos de tema ficam em `deployments/compose/seed`, montados em `/seed` no container. O backend recusa cores com contraste insuficiente, valores fora das listas permitidas e qualquer campo desconhecido.
 
+## Criar os primeiros acessos
+
+Compradores se cadastram na própria loja. Equipes e operadores entram por convite:
+
+```bash
+docker compose run --rm tenantctl staff invite --slug aurora --email dona@exemplo.com --name "Dona da Loja"
+docker compose run --rm tenantctl operator invite --email operador@exemplo.com --name "Operador"
+```
+
+O comando mostra o link do convite, válido por 7 dias. No painel da loja, informe o identificador da loja (`aurora`) ao entrar. No console da plataforma, a verificação em duas etapas é obrigatória.
+
+Em desenvolvimento, nenhum e-mail sai do ambiente: as mensagens ficam disponíveis no Mailpit.
+
 ## Backend
 
 ```bash
@@ -115,6 +129,8 @@ Em `staging` e `production`, a API também exige:
 - `DB_SSLMODE` igual a `verify-full` ou `verify-ca`.
 - `REDIS_TLS=true` e `REDIS_PASSWORD` preenchido.
 - `TELEMETRY_OTLP_INSECURE=false`.
+- `AUTH_COOKIE_SECURE=true`, `RATE_LIMIT_ENABLED=true`, `SMTP_REQUIRE_TLS=true` e `STORE_PUBLIC_SCHEME=https`.
+- Chaves diferentes das chaves de exemplo do `.env.example`.
 
 A API também recusa iniciar se o usuário do banco for superusuário ou tiver `BYPASSRLS`.
 
@@ -134,6 +150,15 @@ A API também recusa iniciar se o usuário do banco for superusuário ou tiver `
 | `MIGRATION_DB_USER`, `MIGRATION_DB_PASSWORD` | obrigatórias nas migrations | Credencial usada só para migrations |
 | `PLATFORM_DB_USER`, `PLATFORM_DB_PASSWORD` | obrigatórias no `tenantctl` | Credencial usada só para gerenciar lojas |
 | `PLATFORM_BASE_DOMAIN` | obrigatória no `tenantctl` | Domínio base dos subdomínios das lojas |
+| `AUTH_SIGNING_KEY`, `MFA_ENCRYPTION_KEY` | obrigatórias | Chaves de 32 bytes em base64. Gere com `openssl rand -base64 32` |
+| `AUTH_COOKIE_SECURE` | `true` | Exige HTTPS no cookie de sessão |
+| `TRUSTED_PROXIES` | vazia | Faixas CIDR dos proxies confiáveis |
+| `RATE_LIMIT_ENABLED` | `true` | Liga os limites de tentativas |
+| `ADMIN_PUBLIC_URL`, `CONSOLE_PUBLIC_URL` | obrigatórias | Endereços usados nos e-mails |
+| `STORE_PUBLIC_SCHEME`, `STORE_PUBLIC_PORT` | `https`, vazia | Endereço das lojas nos e-mails |
+| `SMTP_ADDR`, `SMTP_FROM` | obrigatórias | Servidor e remetente de e-mail |
+| `SMTP_USERNAME`, `SMTP_PASSWORD` | vazias | Credenciais do servidor de e-mail |
+| `SMTP_REQUIRE_TLS` | `true` | Exige TLS no envio de e-mail |
 | `REDIS_ADDR` | obrigatória | Endereço do Redis |
 | `REDIS_PASSWORD`, `REDIS_TLS` | vazia, `false` | Acesso ao Redis |
 | `TELEMETRY_ENABLED` | `true` | Liga a exportação de telemetria |

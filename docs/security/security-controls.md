@@ -6,22 +6,22 @@ Referências: OWASP ASVS e OWASP Top 10. Este documento descreve controles técn
 
 | Tema | Controle |
 | --- | --- |
-| Senhas | Argon2id com parâmetros calibrados em produção, respeitando o mínimo do OWASP; verificação contra senhas vazadas |
+| Senhas | Argon2id com os parâmetros do OWASP, mínimo de 10 caracteres e bloqueio de senhas comuns. A consulta a bases de senhas vazadas ainda não foi implementada |
 | Realms | Plataforma, equipe da loja e comprador têm audiências e fluxos separados |
 | Access token | JWT EdDSA, 10 minutos, mantido em memória no navegador |
 | Refresh token | Opaco, hash no banco, rotativo, cookie `__Host-` `HttpOnly` `Secure` `SameSite=Lax` |
 | MFA | TOTP e códigos de recuperação; obrigatório para Super Admin e configurável para a equipe da loja; passkeys em evolução futura |
 | Sessões | Lista de dispositivos, revogação individual ou total, histórico de acessos |
 | Recuperação de senha | Token de uso único, curto, guardado como hash; revoga sessões ao concluir |
-| OAuth2 e OIDC | Authorization Code com PKCE, quando habilitado por tenant |
+| OAuth2 e OIDC | Ainda não implementado. Quando adotado, usará Authorization Code com PKCE |
 
 ## 2. Autorização
 
 - RBAC com permissões granulares no formato `recurso:ação`, como `orders:refund`.
 - Política deny-by-default: uma rota sem política declarada falha em um teste automatizado.
 - Verificação em três níveis: tenant, permissão e propriedade do recurso.
-- Ações críticas exigem MFA recente: reembolso, troca de credenciais de gateway e gestão de equipe.
-- Acesso do suporte da plataforma a uma loja é temporário, justificado e auditado.
+- Planejado para a Fase 6: exigir MFA recente em ações críticas, como reembolso e troca de credenciais de gateway.
+- Planejado para a Fase 7: acesso do suporte da plataforma a uma loja de forma temporária, justificada e auditada.
 
 ## 3. Proteção da aplicação
 

@@ -15,6 +15,10 @@ tags:
     description: Estado da plataforma
   - name: Storefront
     description: Configuração pública das lojas
+  - name: Identity
+    description: >-
+      Contas e sessões. As mesmas rotas existem em /api/v1/staff para equipes de loja e em
+      /api/v1/platform para operadores, que também têm /team, /roles e /audit.
 paths:
   /api/v1/status:
     get:
@@ -71,6 +75,265 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      tags: [Identity]
+      summary: Inicia uma sessão
+      responses:
+        "200":
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/register:
+    post:
+      operationId: register
+      tags: [Identity]
+      summary: Cria uma conta de comprador
+      responses:
+        "2XX":
+          description: Sucesso
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/mfa/challenge:
+    post:
+      operationId: completeChallenge
+      tags: [Identity]
+      summary: Conclui o login com o segundo fator
+      responses:
+        "200":
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/refresh:
+    post:
+      operationId: refreshSession
+      tags: [Identity]
+      summary: Renova a sessão usando o cookie
+      responses:
+        "200":
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      tags: [Identity]
+      summary: Encerra a sessão
+      responses:
+        "2XX":
+          description: Sucesso
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/password/forgot:
+    post:
+      operationId: forgotPassword
+      tags: [Identity]
+      summary: Solicita a redefinição de senha
+      responses:
+        "2XX":
+          description: Sucesso
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/password/reset:
+    post:
+      operationId: resetPassword
+      tags: [Identity]
+      summary: Define uma nova senha
+      responses:
+        "2XX":
+          description: Sucesso
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/email/verify:
+    post:
+      operationId: verifyEmail
+      tags: [Identity]
+      summary: Confirma o e-mail
+      responses:
+        "2XX":
+          description: Sucesso
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/me:
+    get:
+      operationId: getMe
+      tags: [Identity]
+      summary: Consulta a própria conta
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserView"
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/password/change:
+    post:
+      operationId: changePassword
+      tags: [Identity]
+      summary: Altera a senha
+      security:
+        - bearerAuth: []
+      responses:
+        "2XX":
+          description: Sucesso
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/sessions:
+    get:
+      operationId: listSessions
+      tags: [Identity]
+      summary: Lista as sessões ativas
+      security:
+        - bearerAuth: []
+      responses:
+        "2XX":
+          description: Sucesso
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    delete:
+      operationId: revokeOtherSessions
+      tags: [Identity]
+      summary: Encerra as outras sessões
+      security:
+        - bearerAuth: []
+      responses:
+        "2XX":
+          description: Sucesso
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/access-history:
+    get:
+      operationId: accessHistory
+      tags: [Identity]
+      summary: Lista o histórico de acessos
+      security:
+        - bearerAuth: []
+      responses:
+        "2XX":
+          description: Sucesso
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/mfa/enroll:
+    post:
+      operationId: enrollMfa
+      tags: [Identity]
+      summary: Inicia a verificação em duas etapas
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaEnrollment"
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/mfa/enroll/confirm:
+    post:
+      operationId: confirmMfa
+      tags: [Identity]
+      summary: Ativa a verificação em duas etapas
+      security:
+        - bearerAuth: []
+      responses:
+        "2XX":
+          description: Sucesso
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /api/v1/auth/mfa/disable:
+    post:
+      operationId: disableMfa
+      tags: [Identity]
+      summary: Desativa a verificação em duas etapas
+      security:
+        - bearerAuth: []
+      responses:
+        "2XX":
+          description: Sucesso
+        default:
+          description: Erro
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
   /health/live:
     get:
       operationId: getLiveness
@@ -106,6 +369,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReadinessReport"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     SystemState:
       type: string
@@ -233,6 +501,138 @@ components:
               type: string
             faviconUrl:
               type: string
+    UserView:
+      type: object
+      required: [id, email, name, realm, emailVerified, mfaEnabled, permissions]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        realm:
+          type: string
+        emailVerified:
+          type: boolean
+        mfaEnabled:
+          type: boolean
+        role:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    AuthResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+        accessToken:
+          type: string
+        expiresIn:
+          type: integer
+        challenge:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserView"
+        recoveryCodes:
+          type: array
+          items:
+            type: string
+    MfaEnrollment:
+      type: object
+      required: [secret, otpauthUri]
+      properties:
+        secret:
+          type: string
+        otpauthUri:
+          type: string
+    SessionView:
+      type: object
+      required: [id, device, ip, createdAt, lastUsedAt, current]
+      properties:
+        id:
+          type: string
+        device:
+          type: string
+        ip:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+        current:
+          type: boolean
+    AccessEvent:
+      type: object
+      required: [id, event, device, ip, occurredAt]
+      properties:
+        id:
+          type: string
+        event:
+          type: string
+        device:
+          type: string
+        ip:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+    TeamMember:
+      type: object
+      required: [id, email, name, status, mfaEnabled, role, roleName]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+        mfaEnabled:
+          type: boolean
+        role:
+          type: string
+        roleName:
+          type: string
+    RoleView:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+    AuditEntry:
+      type: object
+      required: [id, actorType, actorId, action, targetType, targetId, ip, metadata, occurredAt]
+      properties:
+        id:
+          type: string
+        actorType:
+          type: string
+        actorId:
+          type: string
+        action:
+          type: string
+        targetType:
+          type: string
+        targetId:
+          type: string
+        ip:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+        occurredAt:
+          type: string
+          format: date-time
     FieldError:
       type: object
       required: [field, code, message]

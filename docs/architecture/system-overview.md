@@ -243,7 +243,8 @@ As versões exatas serão fixadas na Fase 2.
 │       ├── ui/                   # Design system e tokens CSS
 │       ├── api-client/           # Cliente tipado a partir do OpenAPI
 │       ├── theme/                # Conversão segura de temas em CSS
-│       └── panel-shell/          # Base compartilhada dos painéis
+│       ├── auth/                 # Sessão e telas de acesso
+│       ├── panel-shell/          # Base compartilhada dos painéis
 ├── deployments/
 │   ├── compose/                  # Configurações do compose.yaml da raiz
 │   ├── kubernetes/               # Base e overlays por ambiente

@@ -2,7 +2,7 @@
 
 Plataforma SaaS de e-commerce multi-tenant: um único backend e um único frontend atendem várias lojas isoladas, cada uma com identidade própria.
 
-**Estado atual:** Fase 3 (núcleo multi-tenant). Lojas já têm domínio, tema e funcionalidades próprios, mas a plataforma ainda não possui login, catálogo ou checkout.
+**Estado atual:** Fase 4 (identidade e segurança). Lojas têm domínio, tema, contas, equipe e permissões próprios, mas a plataforma ainda não possui catálogo ou checkout.
 
 | Camada | Tecnologias |
 | --- | --- |

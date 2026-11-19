@@ -18,7 +18,8 @@ Cada decisão registra contexto, escolha, consequências e alternativas. Uma dec
 | 012 | Dados de cartão nunca passam pela plataforma | Aceito |
 | 013 | Temas por tokens validados | Aceito |
 | 014 | Segredos de tenant com envelope encryption | Aceito |
-| 015 | Gestão de lojas por linha de comando até existir login | Aceito |
+| 015 | Gestão de lojas por linha de comando até existir o console | Aceito |
+| 016 | Operadores da plataforma em um tenant reservado | Aceito |
 
 ## ADR-001: Monólito modular com fronteiras impostas pelo compilador
 
@@ -138,12 +139,22 @@ Cada decisão registra contexto, escolha, consequências e alternativas. Uma dec
 
 **Consequências.** Um vazamento do banco não revela segredos, e a rotação é feita por tenant. Em desenvolvimento, a chave mestra vem de uma variável de ambiente local.
 
-## ADR-015: Gestão de lojas por linha de comando até existir login
+## ADR-015: Gestão de lojas por linha de comando até existir o console
 
-**Contexto.** A Fase 3 cria lojas e temas, mas autenticação e permissões só chegam na Fase 4. Uma rota HTTP de escrita sem autorização exporia todas as lojas.
+**Contexto.** A Fase 3 cria lojas e temas antes de existir um console autenticado para gerenciá-los. Uma rota HTTP de escrita sem autorização exporia todas as lojas.
 
 **Decisão.** O cadastro é feito pela ferramenta `tenantctl`, com o papel de banco `app_platform`. A API usa apenas leitura nas tabelas de lojas.
 
-**Consequências.** Nenhuma superfície de escrita fica exposta na internet. As regras ficam nos casos de uso do módulo e serão reaproveitadas pelo console da Fase 7. Até a Fase 4, as alterações feitas pela ferramenta não têm trilha de auditoria própria.
+**Consequências.** Nenhuma superfície de escrita fica exposta na internet. As regras ficam nos casos de uso do módulo e serão reaproveitadas pelo console da Fase 7. Desde a Fase 4, cada alteração feita pela ferramenta é registrada na trilha de auditoria, com o ator `tenantctl`.
 
 **Alternativas.** Rotas protegidas por uma chave fixa: segredo compartilhado, sem identidade do operador e difícil de revogar.
+
+## ADR-016: Operadores da plataforma em um tenant reservado
+
+**Contexto.** Compradores, equipes de loja e operadores da plataforma seguem os mesmos fluxos de senha, sessão e MFA, mas não podem compartilhar contas nem acessos.
+
+**Decisão.** Todas as contas ficam em `identity.users`, separadas pelo campo `realm`. Operadores pertencem a um tenant reservado, sem domínio e fora da resolução de lojas. Cada portal tem rotas, audiência de token e cookies próprios.
+
+**Consequências.** O RLS isola operadores das lojas sem código duplicado. Um token só é aceito no portal para o qual foi emitido. A leitura global entre lojas continua restrita ao papel `app_platform` e será exposta no console da Fase 7.
+
+**Alternativas.** Tabelas separadas para operadores: duplicariam sessões, tokens, MFA e consultas sem ganho de isolamento.

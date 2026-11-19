@@ -88,7 +88,7 @@ Pontos que evitam falhas conhecidas:
 | --- | --- | --- |
 | `app_owner` | Migrations, nunca em tempo de execução | Dono dos objetos, também sujeito a `FORCE` |
 | `app_runtime` | API e Worker | DML nas tabelas, sempre filtrado por RLS |
-| `app_platform` | Ferramenta `tenantctl` e, na Fase 7, o console da plataforma | Gestão das tabelas de lojas; sem DDL e sem acesso a dados de negócio |
+| `app_platform` | Ferramenta `tenantctl` e, na Fase 7, o console da plataforma | Gestão de lojas e convites; sem DDL e sem acesso a dados de negócio |
 | `app_relay` | Outbox Relay (Fase 6) | Somente tabela de outbox |
 
 A busca de domínio ocorre antes de existir contexto de tenant. Por isso, `app_runtime` não lê a tabela de domínios e usa apenas a função `core.resolve_tenant_by_host`, que retorna ID e status.
@@ -146,7 +146,7 @@ Alterações de tema criam uma nova versão, com pré-visualização e retorno �
 
 ## 6. Provisionamento
 
-Enquanto não existe login, nenhuma rota HTTP altera dados de lojas. O cadastro é feito pela ferramenta `tenantctl`, executada por operadores com acesso ao ambiente (ADR-015). Os comandos estão em [Primeiros passos](../development/getting-started.md).
+Enquanto o console da Fase 7 não existe, nenhuma rota HTTP altera dados de lojas. O cadastro é feito pela ferramenta `tenantctl`, executada por operadores com acesso ao ambiente (ADR-015). Os comandos estão em [Primeiros passos](../development/getting-started.md).
 
 ## 7. Vizinho barulhento
 
