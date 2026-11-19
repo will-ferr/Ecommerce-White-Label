@@ -85,6 +85,7 @@ type OrderView struct {
 	Subtotal        int64          `json:"subtotal"`
 	ShippingAmount  int64          `json:"shippingAmount"`
 	Discount        int64          `json:"discount"`
+	CouponCode      string         `json:"couponCode"`
 	Tax             int64          `json:"tax"`
 	Total           int64          `json:"total"`
 	Currency        string         `json:"currency"`
@@ -104,7 +105,7 @@ func (s *Service) view(order sqlcgen.OrdersOrder, items []sqlcgen.OrdersItem) Or
 	view := OrderView{
 		ID: order.ID, Number: order.Number, Status: order.Status, CustomerName: order.CustomerName,
 		CustomerEmail: order.CustomerEmail, ShippingMethod: order.ShippingMethod, Subtotal: order.SubtotalAmount,
-		ShippingAmount: order.ShippingAmount, Discount: order.DiscountAmount, Tax: order.TaxAmount, Total: order.TotalAmount,
+		ShippingAmount: order.ShippingAmount, Discount: order.DiscountAmount, CouponCode: order.CouponCode, Tax: order.TaxAmount, Total: order.TotalAmount,
 		Currency: order.Currency, TrackingCode: order.TrackingCode, CancelReason: order.CancelReason,
 		PaymentDueAt: order.PaymentDueAt, CreatedAt: order.CreatedAt, Items: []OrderItem{},
 	}
@@ -310,6 +311,9 @@ func (s *Service) cancel(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries, ord
 		if err := inventory.Release(ctx, tx, order.TenantID, order.ID); err != nil {
 			return err
 		}
+	}
+	if err := releaseCoupon(ctx, q, order.TenantID, order.ID); err != nil {
+		return err
 	}
 	return s.changeStatus(ctx, tx, q, order, domain.Canceled, "", reason, by)
 }

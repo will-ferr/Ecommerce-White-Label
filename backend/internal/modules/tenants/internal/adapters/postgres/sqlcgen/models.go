@@ -116,6 +116,20 @@ type CheckoutIdempotencyKey struct {
 	CreatedAt   time.Time
 }
 
+type ContentPage struct {
+	TenantID       uuid.UUID
+	ID             uuid.UUID
+	Slug           string
+	Title          string
+	Body           string
+	SeoDescription string
+	Status         string
+	ShowInFooter   bool
+	Version        int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
 type CoreFeatureFlag struct {
 	Key         string
 	Description string
@@ -420,6 +434,7 @@ type OrdersOrder struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	StoreHost       string
+	CouponCode      string
 }
 
 type OrdersStatusHistory struct {
@@ -468,6 +483,35 @@ type PaymentsWebhookEvent struct {
 	Amount            *int64
 	Outcome           string
 	ReceivedAt        time.Time
+}
+
+type PromotionsCoupon struct {
+	TenantID         uuid.UUID
+	ID               uuid.UUID
+	Code             string
+	Description      string
+	Kind             string
+	Value            int64
+	MinSubtotal      int64
+	StartsAt         *time.Time
+	EndsAt           *time.Time
+	UsageLimit       *int32
+	PerCustomerLimit *int32
+	UsedCount        int32
+	Active           bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type PromotionsRedemption struct {
+	TenantID       uuid.UUID
+	ID             uuid.UUID
+	CouponID       uuid.UUID
+	OrderID        uuid.UUID
+	CustomerEmail  string
+	DiscountAmount int64
+	Status         string
+	CreatedAt      time.Time
 }
 
 type ShippingMethod struct {

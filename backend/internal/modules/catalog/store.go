@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -205,4 +206,33 @@ func (s *Service) StoreProduct(ctx context.Context, slug string) (ProductDetail,
 		return nil
 	})
 	return detail, err
+}
+
+// SitemapEntry is an address of the store for search engines.
+type SitemapEntry struct {
+	Path      string     `json:"path"`
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
+}
+
+// SitemapEntries lists the products and categories buyers can open.
+func (s *Service) SitemapEntries(ctx context.Context) ([]SitemapEntry, error) {
+	entries := []SitemapEntry{}
+	err := s.in(ctx, func(_ pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID) error {
+		categories, err := q.ListCategories(ctx, tenantID)
+		if err != nil {
+			return err
+		}
+		for _, category := range categories {
+			entries = append(entries, SitemapEntry{Path: "/c/" + category.Slug})
+		}
+		products, err := q.SitemapProducts(ctx, tenantID)
+		if err != nil {
+			return err
+		}
+		for _, product := range products {
+			entries = append(entries, SitemapEntry{Path: "/p/" + product.Slug, UpdatedAt: &product.UpdatedAt})
+		}
+		return nil
+	})
+	return entries, err
 }

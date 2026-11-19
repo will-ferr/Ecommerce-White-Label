@@ -97,3 +97,20 @@ func List(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID, limit int32) ([]Vi
 	}
 	return views, nil
 }
+
+type operatorKey struct{}
+
+// WithOperator records which platform operator is acting, so operator
+// changes are attributed to a person instead of the command line tool.
+func WithOperator(ctx context.Context, operatorID string) context.Context {
+	return context.WithValue(ctx, operatorKey{}, operatorID)
+}
+
+// OperatorFrom returns the operator acting in ctx, or "tenantctl" for the
+// command line tool.
+func OperatorFrom(ctx context.Context) string {
+	if id, ok := ctx.Value(operatorKey{}).(string); ok && id != "" {
+		return id
+	}
+	return "tenantctl"
+}

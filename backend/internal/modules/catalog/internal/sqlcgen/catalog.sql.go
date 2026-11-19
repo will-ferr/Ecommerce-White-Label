@@ -590,6 +590,40 @@ func (q *Queries) SearchProducts(ctx context.Context, arg SearchProductsParams) 
 	return items, nil
 }
 
+const sitemapProducts = `-- name: SitemapProducts :many
+SELECT p.slug, p.updated_at
+FROM catalog.products p
+WHERE p.tenant_id = $1 AND p.status = 'active'
+  AND EXISTS (SELECT 1 FROM catalog.variants v WHERE v.tenant_id = p.tenant_id AND v.product_id = p.id AND v.status = 'active')
+ORDER BY p.slug
+LIMIT 50000
+`
+
+type SitemapProductsRow struct {
+	Slug      string
+	UpdatedAt time.Time
+}
+
+func (q *Queries) SitemapProducts(ctx context.Context, tenantID uuid.UUID) ([]SitemapProductsRow, error) {
+	rows, err := q.db.Query(ctx, sitemapProducts, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SitemapProductsRow
+	for rows.Next() {
+		var i SitemapProductsRow
+		if err := rows.Scan(&i.Slug, &i.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateCategory = `-- name: UpdateCategory :execrows
 UPDATE catalog.categories
 SET parent_id = $3, name = $4, slug = $5, description = $6, position = $7, updated_at = now()

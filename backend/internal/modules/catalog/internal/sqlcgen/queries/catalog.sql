@@ -115,3 +115,11 @@ WHERE v.tenant_id = $1 AND v.id = ANY(sqlc.arg('variant_ids')::uuid[])
 
 -- name: VariantExists :one
 SELECT EXISTS (SELECT 1 FROM catalog.variants WHERE tenant_id = $1 AND id = $2);
+
+-- name: SitemapProducts :many
+SELECT p.slug, p.updated_at
+FROM catalog.products p
+WHERE p.tenant_id = $1 AND p.status = 'active'
+  AND EXISTS (SELECT 1 FROM catalog.variants v WHERE v.tenant_id = p.tenant_id AND v.product_id = p.id AND v.status = 'active')
+ORDER BY p.slug
+LIMIT 50000;

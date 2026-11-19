@@ -29,3 +29,28 @@ func LoadPlatformTool(lookup Lookup) (PlatformTool, error) {
 	}
 	return cfg, nil
 }
+
+// PlatformAPI is the extra configuration of the process that serves the
+// platform console. Only this process holds the platform database role.
+type PlatformAPI struct {
+	Database   Database
+	BaseDomain string
+}
+
+// LoadPlatformAPI reads the API configuration plus the platform credentials.
+func LoadPlatformAPI(lookup Lookup) (Config, PlatformAPI, error) {
+	cfg, err := Load(lookup)
+	r := reader{lookup: lookup}
+	platform := PlatformAPI{
+		Database:   r.database("PLATFORM_DB_USER", "PLATFORM_DB_PASSWORD"),
+		BaseDomain: strings.ToLower(r.required("PLATFORM_BASE_DOMAIN")),
+	}
+	if cfg.Environment.IsHardened() {
+		r.check(platform.Database.SSLMode == "verify-full" || platform.Database.SSLMode == "verify-ca",
+			"DB_SSLMODE must be verify-full or verify-ca in staging and production")
+	}
+	if err := errors.Join(err, errors.Join(r.errs...)); err != nil {
+		return Config{}, PlatformAPI{}, fmt.Errorf("invalid platform configuration: %w", err)
+	}
+	return cfg, platform, nil
+}

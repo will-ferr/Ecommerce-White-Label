@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/tenants/internal/domain"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/apperr"
@@ -28,6 +29,7 @@ type TenantSummary struct {
 	Status    string
 	PlanCode  string
 	StoreName string
+	CreatedAt time.Time
 }
 
 // DomainRecord is a stored domain.

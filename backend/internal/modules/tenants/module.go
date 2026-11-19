@@ -19,6 +19,7 @@ import (
 
 // Module is the public surface of the tenants module for the API process.
 type Module struct {
+	db         *database.TenantDB
 	logger     *slog.Logger
 	resolver   *app.Resolver
 	storefront *tenanthttp.StorefrontHandler
@@ -26,8 +27,10 @@ type Module struct {
 
 // New wires the module. The pool must use the unprivileged runtime role.
 func New(pool *pgxpool.Pool, logger *slog.Logger) *Module {
-	reader := postgres.NewStorefrontReader(database.NewTenantDB(pool))
+	db := database.NewTenantDB(pool)
+	reader := postgres.NewStorefrontReader(db)
 	return &Module{
+		db:         db,
 		logger:     logger,
 		resolver:   app.NewResolver(postgres.NewHostLookup(pool), time.Now),
 		storefront: tenanthttp.NewStorefrontHandler(app.NewStorefront(reader, logger)),

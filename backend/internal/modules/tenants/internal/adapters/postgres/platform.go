@@ -40,7 +40,7 @@ func (s *PlatformStore) audited(ctx context.Context, action, target string, meta
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Entry{
-			TenantID: tenancy.PlatformTenantID, ActorType: audit.ActorOperator, ActorID: "tenantctl",
+			TenantID: tenancy.PlatformTenantID, ActorType: audit.ActorOperator, ActorID: audit.OperatorFrom(ctx),
 			Action: action, TargetType: "tenant", TargetID: target, Metadata: metadata,
 		})
 	})
@@ -139,7 +139,7 @@ func (s *PlatformStore) ListTenants(ctx context.Context) ([]app.TenantSummary, e
 	tenants := make([]app.TenantSummary, 0, len(rows))
 	for _, row := range rows {
 		tenants = append(tenants, app.TenantSummary{
-			Slug: row.Slug, Status: row.Status, PlanCode: row.PlanCode, StoreName: row.StoreName,
+			Slug: row.Slug, Status: row.Status, PlanCode: row.PlanCode, StoreName: row.StoreName, CreatedAt: row.CreatedAt,
 		})
 	}
 	return tenants, nil

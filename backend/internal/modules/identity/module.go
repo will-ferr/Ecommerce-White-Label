@@ -35,6 +35,7 @@ type Deps struct {
 
 // Module is the public surface of the identity module.
 type Module struct {
+	service  *app.Service
 	customer *identityhttp.Handler
 	staff    *identityhttp.Handler
 	platform *identityhttp.Handler
@@ -61,7 +62,7 @@ func New(deps Deps) (*Module, error) {
 	handler := func(portal app.Portal) *identityhttp.Handler {
 		return identityhttp.NewHandler(service, portal, deps.Limiter, deps.Logger, deps.Auth.CookieSecure)
 	}
-	return &Module{customer: handler(app.Customer), staff: handler(app.Staff), platform: handler(app.Platform)}, nil
+	return &Module{service: service, customer: handler(app.Customer), staff: handler(app.Staff), platform: handler(app.Platform)}, nil
 }
 
 // CustomerAuthentication reads the bearer token of customers on every store route.

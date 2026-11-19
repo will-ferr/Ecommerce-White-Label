@@ -27,6 +27,11 @@ overrides:
         go_type:
           type: int64
           pointer: true
+      - db_type: pg_catalog.int4
+        nullable: true
+        go_type:
+          type: int32
+          pointer: true
       - db_type: pg_catalog.bool
         nullable: true
         go_type:
@@ -82,4 +87,12 @@ sql:
       go:
         package: sqlcgen
         out: internal/modules/sales/internal/sqlcgen
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/content/internal/sqlcgen/queries
+    gen:
+      go:
+        package: sqlcgen
+        out: internal/modules/content/internal/sqlcgen
         sql_package: pgx/v5

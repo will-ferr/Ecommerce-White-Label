@@ -22,3 +22,19 @@ JOIN core.tenants t ON t.id = $1
 LEFT JOIN core.plan_features pf ON pf.plan_id = t.plan_id AND pf.feature_key = f.key
 LEFT JOIN core.tenant_features tf ON tf.tenant_id = t.id AND tf.feature_key = f.key
 ORDER BY f.key;
+
+-- name: UpdateStoreProfile :execrows
+UPDATE core.tenant_settings
+SET store_name = $2, seo_title = $3, seo_description = $4, seo_indexable = $5, updated_at = now()
+WHERE tenant_id = $1;
+
+-- name: ListThemeVersions :many
+SELECT version, status, created_at
+FROM core.theme_versions
+WHERE tenant_id = $1
+ORDER BY version DESC
+LIMIT 20;
+
+-- name: LockStoreThemes :exec
+-- Serializes theme changes of one store.
+SELECT pg_advisory_xact_lock(hashtextextended('core.theme_versions:' || sqlc.arg('tenant_id')::uuid::text, 0));

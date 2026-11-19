@@ -218,3 +218,19 @@ func relativeLuminance(hex string) float64 {
 	}
 	return 0.2126*channel(1) + 0.7152*channel(3) + 0.0722*channel(5)
 }
+
+// ThemeChoices lists the values a theme may select, for editors.
+type ThemeChoices struct {
+	Fonts   []string `json:"fonts"`
+	Radius  []string `json:"radius"`
+	Density []string `json:"density"`
+	Headers []string `json:"headers"`
+}
+
+// AllowedThemeChoices returns the supported values of each choice token.
+func AllowedThemeChoices() ThemeChoices {
+	return ThemeChoices{
+		Fonts: slices.Clone(allowedFonts), Radius: slices.Clone(allowedRadius),
+		Density: slices.Clone(allowedDensity), Headers: slices.Clone(allowedHeaders),
+	}
+}

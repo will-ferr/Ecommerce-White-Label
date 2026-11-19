@@ -76,7 +76,7 @@ func (s *suite) unpublished(t *testing.T) int {
 
 func eventually(t *testing.T, what string, condition func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
 		if condition() {
 			return

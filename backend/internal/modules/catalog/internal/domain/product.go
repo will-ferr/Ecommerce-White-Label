@@ -11,11 +11,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
-	"golang.org/x/text/runes"
-	"golang.org/x/text/transform"
-	"golang.org/x/text/unicode/norm"
 
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/apperr"
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/slug"
 )
 
 // Product statuses.
@@ -42,27 +40,7 @@ var (
 
 // Slugify turns a name into an address segment: "Café Especial" becomes "cafe-especial".
 func Slugify(text string) string {
-	decomposed, _, err := transform.String(transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC), text)
-	if err != nil {
-		decomposed = text
-	}
-	var builder strings.Builder
-	dash := false
-	for _, r := range strings.ToLower(decomposed) {
-		switch {
-		case r >= 'a' && r <= 'z' || r >= '0' && r <= '9':
-			builder.WriteRune(r)
-			dash = false
-		case builder.Len() > 0 && !dash:
-			builder.WriteByte('-')
-			dash = true
-		}
-	}
-	slug := strings.TrimSuffix(builder.String(), "-")
-	if len(slug) > 120 {
-		slug = strings.TrimSuffix(slug[:120], "-")
-	}
-	return slug
+	return slug.Make(text, 120)
 }
 
 // Image is a product picture hosted on HTTPS.

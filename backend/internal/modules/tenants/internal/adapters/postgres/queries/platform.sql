@@ -31,7 +31,7 @@ FOR UPDATE;
 SELECT EXISTS (SELECT 1 FROM core.tenants WHERE slug = $1);
 
 -- name: ListTenants :many
-SELECT t.slug, t.status, p.code AS plan_code, s.store_name
+SELECT t.slug, t.status, p.code AS plan_code, s.store_name, t.created_at
 FROM core.tenants t
 JOIN core.plans p ON p.id = t.plan_id
 JOIN core.tenant_settings s ON s.tenant_id = t.id
@@ -93,3 +93,19 @@ WHERE tenant_id = $1 AND status = 'published';
 -- name: RepublishThemeVersion :execrows
 UPDATE core.theme_versions SET status = 'published'
 WHERE tenant_id = $1 AND version = $2;
+
+-- name: GetTenantDetail :one
+SELECT t.id, t.slug, t.status, t.created_at, p.code AS plan_code, s.store_name, s.currency, s.seo_indexable
+FROM core.tenants t
+JOIN core.plans p ON p.id = t.plan_id
+JOIN core.tenant_settings s ON s.tenant_id = t.id
+WHERE t.slug = $1;
+
+-- name: ListTenantDomains :many
+SELECT host, kind, verification_token, verified_at, created_at
+FROM core.tenant_domains
+WHERE tenant_id = $1
+ORDER BY kind DESC, host;
+
+-- name: ListPlans :many
+SELECT code, name FROM core.plans ORDER BY code;

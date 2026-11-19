@@ -15,7 +15,6 @@ import (
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/httpx"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/ratelimit"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/apperr"
-	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/br"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/reqctx"
 )
 
@@ -151,14 +150,11 @@ func (m *Module) RegisterStoreRoutes(router chi.Router) {
 	})
 
 	m.route(router, http.MethodPost, "/checkout/summary", public, func(w http.ResponseWriter, r *http.Request) error {
-		var body struct {
-			ShippingMethodID *uuid.UUID `json:"shippingMethodId"`
-			PostalCode       string     `json:"postalCode"`
-		}
+		var body SummaryRequest
 		if err := httpx.DecodeJSON(r, &body); err != nil {
 			return err
 		}
-		summary, err := m.service.Summary(r.Context(), m.cartRef(r), body.ShippingMethodID, br.PostalCodeDigits(body.PostalCode))
+		summary, err := m.service.Summary(r.Context(), m.cartRef(r), body)
 		if err != nil {
 			return err
 		}
@@ -304,11 +300,48 @@ func (m *Module) changeCart(w http.ResponseWriter, r *http.Request, body any, va
 func (m *Module) RegisterAdminRoutes(router chi.Router) {
 	read, manage := authz.Permission("orders:read"), authz.Permission("orders:manage")
 
+	promotions := authz.Permission("promotions:manage")
+	m.route(router, http.MethodGet, "/promotions/coupons", promotions, func(w http.ResponseWriter, r *http.Request) error {
+		coupons, err := m.service.Coupons(r.Context())
+		if err != nil {
+			return err
+		}
+		return httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": coupons})
+	})
+	saveCoupon := func(w http.ResponseWriter, r *http.Request, id *uuid.UUID) error {
+		var body CouponInput
+		if err := httpx.DecodeJSON(r, &body); err != nil {
+			return err
+		}
+		principal, _ := authz.FromContext(r.Context())
+		saved, err := m.service.SaveCoupon(r.Context(), principal, id, body)
+		if err != nil {
+			return err
+		}
+		return httpx.WriteJSON(w, http.StatusOK, map[string]any{"id": saved})
+	}
+	m.route(router, http.MethodPost, "/promotions/coupons", promotions, func(w http.ResponseWriter, r *http.Request) error {
+		return saveCoupon(w, r, nil)
+	})
+	m.route(router, http.MethodPut, "/promotions/coupons/{id}", promotions, func(w http.ResponseWriter, r *http.Request) error {
+		id, err := pathUUID(r, "id")
+		if err != nil {
+			return err
+		}
+		return saveCoupon(w, r, &id)
+	})
+
 	m.route(router, http.MethodGet, "/orders", read, func(w http.ResponseWriter, r *http.Request) error {
 		query := r.URL.Query()
-		page, err := m.service.AdminOrders(r.Context(), OrderFilter{
-			Status: query.Get("status"), Search: query.Get("q"), Cursor: query.Get("cursor"), Limit: limit(r),
-		})
+		filter := OrderFilter{Status: query.Get("status"), Search: query.Get("q"), Cursor: query.Get("cursor"), Limit: limit(r)}
+		if raw := query.Get("customer"); raw != "" {
+			customer, err := uuid.Parse(raw)
+			if err != nil {
+				return apperr.Validation(apperr.FieldError{Field: "customer", Code: "invalid", Message: "Use a customer ID."})
+			}
+			filter.CustomerUserID = &customer
+		}
+		page, err := m.service.AdminOrders(r.Context(), filter)
 		if err != nil {
 			return err
 		}

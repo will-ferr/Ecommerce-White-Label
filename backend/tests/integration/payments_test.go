@@ -322,11 +322,16 @@ func TestCheckoutWithoutPaymentProvider(t *testing.T) {
 // storedMail decrypts the e-mails waiting in the outbox of a store.
 func (sh *shop) storedMail(slug string) []mail.Message {
 	sh.t.Helper()
+	return sh.storedMailByID(sh.s.tenants[slug].String())
+}
+
+func (sh *shop) storedMailByID(tenantID string) []mail.Message {
+	sh.t.Helper()
 	sealer, err := mail.NewSealer(testAuthConfig().MFAKey)
 	if err != nil {
 		sh.t.Fatal(err)
 	}
-	rows, err := sh.s.admin.Query(sh.s.ctx, `SELECT id, kind, sealed FROM notifications.emails WHERE tenant_id = $1 AND status = 'pending' ORDER BY id`, sh.s.tenants[slug])
+	rows, err := sh.s.admin.Query(sh.s.ctx, `SELECT id, kind, sealed FROM notifications.emails WHERE tenant_id = $1 AND status = 'pending' ORDER BY id`, tenantID)
 	if err != nil {
 		sh.t.Fatal(err)
 	}
@@ -339,7 +344,7 @@ func (sh *shop) storedMail(slug string) []mail.Message {
 		if err := rows.Scan(&id, &kind, &sealed); err != nil {
 			sh.t.Fatal(err)
 		}
-		plain, err := sealer.Open(sealed, []byte(sh.s.tenants[slug].String()+"|"+id.String()))
+		plain, err := sealer.Open(sealed, []byte(tenantID+"|"+id.String()))
 		if err != nil {
 			sh.t.Fatal(err)
 		}

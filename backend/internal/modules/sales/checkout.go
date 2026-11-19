@@ -43,10 +43,14 @@ type Summary struct {
 	Shipping        *ShippingOption  `json:"shipping"`
 	Subtotal        int64            `json:"subtotal"`
 	ShippingAmount  int64            `json:"shippingAmount"`
+	Discount        int64            `json:"discount"`
 	Tax             int64            `json:"tax"`
 	Total           int64            `json:"total"`
-	Currency        string           `json:"currency"`
-	PaymentLabel    string           `json:"paymentLabel"`
+	Coupon          *AppliedCoupon   `json:"coupon"`
+	// CouponError explains why the coupon sent was not applied.
+	CouponError  string `json:"couponError,omitempty"`
+	Currency     string `json:"currency"`
+	PaymentLabel string `json:"paymentLabel"`
 	// TestPayment tells the buyer that nothing is charged.
 	TestPayment bool `json:"testPayment"`
 }
@@ -60,6 +64,7 @@ type CheckoutInput struct {
 	Address          br.Address `json:"address"`
 	ShippingMethodID uuid.UUID  `json:"shippingMethodId"`
 	ExpectedTotal    int64      `json:"expectedTotal"`
+	CouponCode       string     `json:"couponCode"`
 
 	// StoreHost is the address where the order was placed, used in later
 	// messages. It comes from the request, never from the body.
@@ -113,7 +118,15 @@ func toOption(method sqlcgen.ShippingMethod) ShippingOption {
 	return ShippingOption{ID: method.ID, Name: method.Name, Kind: method.Kind, Price: method.PriceAmount, MinDays: method.MinDays, MaxDays: method.MaxDays}
 }
 
-func (s *Service) summarize(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID, cart *sqlcgen.CartCart, methodID *uuid.UUID, postalCode string) (Summary, error) {
+// SummaryRequest is the delivery choice and coupon the buyer is considering.
+type SummaryRequest struct {
+	ShippingMethodID *uuid.UUID `json:"shippingMethodId"`
+	PostalCode       string     `json:"postalCode"`
+	CouponCode       string     `json:"couponCode"`
+}
+
+func (s *Service) summarize(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID, cart *sqlcgen.CartCart, request SummaryRequest) (Summary, error) {
+	methodID, postalCode := request.ShippingMethodID, br.PostalCodeDigits(request.PostalCode)
 	view, err := s.buildView(ctx, tx, q, tenantID, cart)
 	if err != nil {
 		return Summary{}, err
@@ -148,19 +161,27 @@ func (s *Service) summarize(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries, 
 		summary.ShippingAmount = summary.Shipping.Price
 	}
 	summary.Subtotal, summary.Total, err = domain.Totals(lines, summary.ShippingAmount)
-	return summary, err
+	if err != nil {
+		return Summary{}, err
+	}
+	if code := domain.NormalizeCouponCode(request.CouponCode); code != "" && len(lines) > 0 {
+		if err := s.previewCoupon(ctx, q, tenantID, code, &summary); err != nil {
+			return Summary{}, err
+		}
+	}
+	return summary, nil
 }
 
 // Summary prices the cart with an optional delivery choice. Options priced by
 // postal code appear once the postal code is known.
-func (s *Service) Summary(ctx context.Context, ref CartRef, methodID *uuid.UUID, postalCode string) (Summary, error) {
+func (s *Service) Summary(ctx context.Context, ref CartRef, request SummaryRequest) (Summary, error) {
 	var summary Summary
 	err := s.in(ctx, func(tx pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID) error {
 		cart, err := s.findCart(ctx, q, tenantID, ref)
 		if err != nil {
 			return err
 		}
-		summary, err = s.summarize(ctx, tx, q, tenantID, cart, methodID, postalCode)
+		summary, err = s.summarize(ctx, tx, q, tenantID, cart, request)
 		return err
 	})
 	return summary, err
@@ -248,7 +269,9 @@ func (s *Service) PlaceOrder(ctx context.Context, ref CartRef, key string, input
 			}
 			return err
 		}
-		summary, err := s.summarize(ctx, tx, q, tenantID, cart, &input.ShippingMethodID, input.Address.PostalCode)
+		summary, err := s.summarize(ctx, tx, q, tenantID, cart, SummaryRequest{
+			ShippingMethodID: &input.ShippingMethodID, PostalCode: input.Address.PostalCode, CouponCode: input.CouponCode,
+		})
 		if err != nil {
 			return err
 		}
@@ -259,13 +282,31 @@ func (s *Service) PlaceOrder(ctx context.Context, ref CartRef, key string, input
 			return apperr.Validation(apperr.FieldError{Field: "shippingMethodId", Code: "invalid", Message: "Choose a delivery option."})
 		case summary.Cart.HasUnavailable:
 			return &ReviewError{Code: "OUT_OF_STOCK", Summary: summary}
+		case summary.CouponError != "":
+			return apperr.New(apperr.KindUnprocessable, summary.CouponError, "The coupon cannot be used.")
 		case summary.Total != input.ExpectedTotal:
 			return &ReviewError{Code: "PRICE_CHANGED", Summary: summary}
 		}
 
+		var coupon *sqlcgen.PromotionsCoupon
+		if summary.Coupon != nil {
+			row, discount, err := s.redeemCoupon(ctx, q, tenantID, summary.Coupon.Code, input.CustomerEmail, summary)
+			if err != nil {
+				return err
+			}
+			if discount != summary.Discount {
+				return &ReviewError{Code: "PRICE_CHANGED", Summary: summary}
+			}
+			coupon = &row
+		}
 		placed, err = s.createOrder(ctx, tx, q, tenantID, ref, input, summary)
 		if err != nil {
 			return err
+		}
+		if coupon != nil {
+			if err := recordRedemption(ctx, q, *coupon, placed.orderID, input.CustomerEmail, summary.Discount); err != nil {
+				return err
+			}
 		}
 		if err := q.SetCartStatus(ctx, sqlcgen.SetCartStatusParams{TenantID: tenantID, ID: cart.ID, Status: "converted"}); err != nil {
 			return err
@@ -319,6 +360,7 @@ func (s *Service) createOrder(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries
 	err = q.InsertOrder(ctx, sqlcgen.InsertOrderParams{
 		TenantID: tenantID, ID: orderID, Number: number, CustomerUserID: ref.UserID, CustomerName: input.CustomerName,
 		CustomerEmail: input.CustomerEmail, ShippingAddress: address, ShippingMethod: summary.Shipping.Name, StoreHost: input.StoreHost,
+		DiscountAmount: summary.Discount, CouponCode: couponCode(summary),
 		ShippingAmount: summary.ShippingAmount, SubtotalAmount: summary.Subtotal, TotalAmount: summary.Total,
 		Currency: summary.Currency, PaymentDueAt: s.now().Add(s.paymentTTL),
 	})

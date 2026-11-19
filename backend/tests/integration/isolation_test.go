@@ -297,7 +297,8 @@ func TestTenantIsolation(t *testing.T) {
 		statements := []string{
 			`SELECT * FROM core.tenant_domains`,
 			`UPDATE core.tenants SET status = 'suspended'`,
-			`UPDATE core.tenant_settings SET store_name = 'Invadida'`,
+			`UPDATE core.tenant_settings SET currency = 'USD'`,
+			`UPDATE core.theme_versions SET tokens = '{}'`,
 			`DELETE FROM core.theme_versions`,
 			`INSERT INTO core.tenant_features VALUES ('` + beta.String() + `', 'reviews', false)`,
 			`UPDATE core.feature_flags SET enabled = false`,
@@ -311,6 +312,18 @@ func TestTenantIsolation(t *testing.T) {
 			if err == nil {
 				t.Errorf("statement was allowed: %s", statement)
 			}
+		}
+	})
+
+	t.Run("a store changes only its own name", func(t *testing.T) {
+		var changed int64
+		err := db.Run(tenancy.WithTenant(ctx, alfa), func(tx pgx.Tx) error {
+			tag, err := tx.Exec(ctx, `UPDATE core.tenant_settings SET store_name = 'Invadida' WHERE tenant_id = $1`, beta)
+			changed = tag.RowsAffected()
+			return err
+		})
+		if err != nil || changed != 0 {
+			t.Errorf("store alfa changed %d rows of store beta (%v)", changed, err)
 		}
 	})
 

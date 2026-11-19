@@ -8,6 +8,7 @@ package sqlcgen
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -115,4 +116,76 @@ func (q *Queries) ListFeatureStates(ctx context.Context, id uuid.UUID) ([]ListFe
 		return nil, err
 	}
 	return items, nil
+}
+
+const listThemeVersions = `-- name: ListThemeVersions :many
+SELECT version, status, created_at
+FROM core.theme_versions
+WHERE tenant_id = $1
+ORDER BY version DESC
+LIMIT 20
+`
+
+type ListThemeVersionsRow struct {
+	Version   int32
+	Status    string
+	CreatedAt time.Time
+}
+
+func (q *Queries) ListThemeVersions(ctx context.Context, tenantID uuid.UUID) ([]ListThemeVersionsRow, error) {
+	rows, err := q.db.Query(ctx, listThemeVersions, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListThemeVersionsRow
+	for rows.Next() {
+		var i ListThemeVersionsRow
+		if err := rows.Scan(&i.Version, &i.Status, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockStoreThemes = `-- name: LockStoreThemes :exec
+SELECT pg_advisory_xact_lock(hashtextextended('core.theme_versions:' || $1::uuid::text, 0))
+`
+
+// Serializes theme changes of one store.
+func (q *Queries) LockStoreThemes(ctx context.Context, tenantID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockStoreThemes, tenantID)
+	return err
+}
+
+const updateStoreProfile = `-- name: UpdateStoreProfile :execrows
+UPDATE core.tenant_settings
+SET store_name = $2, seo_title = $3, seo_description = $4, seo_indexable = $5, updated_at = now()
+WHERE tenant_id = $1
+`
+
+type UpdateStoreProfileParams struct {
+	TenantID       uuid.UUID
+	StoreName      string
+	SeoTitle       string
+	SeoDescription string
+	SeoIndexable   bool
+}
+
+func (q *Queries) UpdateStoreProfile(ctx context.Context, arg UpdateStoreProfileParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateStoreProfile,
+		arg.TenantID,
+		arg.StoreName,
+		arg.SeoTitle,
+		arg.SeoDescription,
+		arg.SeoIndexable,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

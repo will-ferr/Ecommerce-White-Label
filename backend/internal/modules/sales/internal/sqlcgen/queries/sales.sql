@@ -75,8 +75,9 @@ RETURNING next_number;
 -- name: InsertOrder :exec
 INSERT INTO orders.orders (
   tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address,
-  shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, payment_due_at, store_host
-) VALUES ($1, $2, $3, 'pending_payment', $4, $5, $6, $7, $8, $9, $10, 0, 0, $11, $12, $13, $14);
+  shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, payment_due_at, store_host,
+  coupon_code
+) VALUES ($1, $2, $3, 'pending_payment', $4, $5, $6, $7, $8, $9, $10, sqlc.arg('discount_amount'), 0, $11, $12, $13, $14, sqlc.arg('coupon_code'));
 
 -- name: InsertOrderItem :exec
 INSERT INTO orders.items (tenant_id, id, order_id, variant_id, product_name, variant_label, sku, quantity, unit_amount, total_amount)
@@ -194,3 +195,87 @@ DELETE FROM customers.addresses WHERE tenant_id = $1 AND user_id = $2 AND id = $
 
 -- name: CountAddresses :one
 SELECT count(*)::integer FROM customers.addresses WHERE tenant_id = $1 AND user_id = $2;
+
+-- Coupons.
+
+-- name: ListCoupons :many
+SELECT * FROM promotions.coupons WHERE tenant_id = $1 ORDER BY created_at DESC, id DESC;
+
+-- name: GetCouponByCode :one
+SELECT * FROM promotions.coupons WHERE tenant_id = $1 AND code = $2;
+
+-- name: LockCouponByCode :one
+SELECT * FROM promotions.coupons WHERE tenant_id = $1 AND code = $2 FOR UPDATE;
+
+-- name: InsertCoupon :exec
+INSERT INTO promotions.coupons (tenant_id, id, code, description, kind, value, min_subtotal, starts_at, ends_at, usage_limit, per_customer_limit, active)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
+
+-- name: UpdateCoupon :execrows
+UPDATE promotions.coupons
+SET description = $3, kind = $4, value = $5, min_subtotal = $6, starts_at = $7, ends_at = $8,
+    usage_limit = $9, per_customer_limit = $10, active = $11, updated_at = now()
+WHERE tenant_id = $1 AND id = $2;
+
+-- name: CountCustomerRedemptions :one
+SELECT count(*)::integer FROM promotions.redemptions
+WHERE tenant_id = $1 AND coupon_id = $2 AND customer_email = $3 AND status = 'applied';
+
+-- name: InsertRedemption :exec
+INSERT INTO promotions.redemptions (tenant_id, id, coupon_id, order_id, customer_email, discount_amount, status)
+VALUES ($1, $2, $3, $4, $5, $6, 'applied');
+
+-- name: AddCouponUse :exec
+UPDATE promotions.coupons SET used_count = used_count + sqlc.arg('delta')::integer, updated_at = now()
+WHERE tenant_id = $1 AND id = $2;
+
+-- name: ReleaseRedemption :one
+UPDATE promotions.redemptions SET status = 'released'
+WHERE tenant_id = $1 AND order_id = $2 AND status = 'applied'
+RETURNING coupon_id;
+
+-- Reports. Orders count as sales once paid, so pending and canceled orders are left out.
+
+-- name: ReportTotals :one
+SELECT
+  count(*) FILTER (WHERE status NOT IN ('pending_payment', 'canceled'))::integer AS paid_orders,
+  coalesce(sum(total_amount) FILTER (WHERE status NOT IN ('pending_payment', 'canceled')), 0)::bigint AS revenue,
+  coalesce(sum(discount_amount) FILTER (WHERE status NOT IN ('pending_payment', 'canceled')), 0)::bigint AS discounts,
+  count(*) FILTER (WHERE status = 'canceled')::integer AS canceled_orders,
+  count(*)::integer AS all_orders
+FROM orders.orders
+WHERE tenant_id = $1 AND created_at >= sqlc.arg('from_at') AND created_at < sqlc.arg('to_at');
+
+-- name: ReportDaily :many
+SELECT to_char(created_at AT TIME ZONE sqlc.arg('timezone')::text, 'YYYY-MM-DD')::text AS day,
+       count(*)::integer AS orders, sum(total_amount)::bigint AS revenue
+FROM orders.orders
+WHERE tenant_id = $1 AND created_at >= sqlc.arg('from_at') AND created_at < sqlc.arg('to_at')
+  AND status NOT IN ('pending_payment', 'canceled')
+GROUP BY 1
+ORDER BY 1;
+
+-- name: ReportTopProducts :many
+SELECT i.product_name, sum(i.quantity)::integer AS quantity, sum(i.total_amount)::bigint AS revenue
+FROM orders.items i
+JOIN orders.orders o ON o.tenant_id = i.tenant_id AND o.id = i.order_id
+WHERE o.tenant_id = $1 AND o.created_at >= sqlc.arg('from_at') AND o.created_at < sqlc.arg('to_at')
+  AND o.status NOT IN ('pending_payment', 'canceled')
+GROUP BY i.product_name
+ORDER BY revenue DESC, i.product_name
+LIMIT 10;
+
+-- Privacy.
+
+-- name: DeleteCustomerAddresses :exec
+DELETE FROM customers.addresses WHERE tenant_id = $1 AND user_id = $2;
+
+-- name: DeleteCustomerCartItems :exec
+DELETE FROM cart.items i USING cart.carts c
+WHERE c.tenant_id = i.tenant_id AND c.id = i.cart_id AND c.tenant_id = $1 AND c.user_id = $2;
+
+-- name: DetachCustomerCarts :exec
+UPDATE cart.carts SET user_id = NULL, status = 'merged', updated_at = now() WHERE tenant_id = $1 AND user_id = $2;
+
+-- name: DetachCustomerOrders :exec
+UPDATE orders.orders SET customer_user_id = NULL, updated_at = now() WHERE tenant_id = $1 AND customer_user_id = $2;

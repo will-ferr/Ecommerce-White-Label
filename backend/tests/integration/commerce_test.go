@@ -21,6 +21,7 @@ type shop struct {
 	t        *testing.T
 	handler  http.Handler
 	modules  *app.Modules
+	mailer   *mailbox
 	owner    *apiClient
 	product  string
 	variants []string
@@ -51,8 +52,9 @@ func items(response apiResponse, key string) []map[string]any {
 // newShop prepares store "alfa" with one product, two variants, stock and a delivery option.
 func newShop(t *testing.T, stock int) *shop {
 	s := newSuite(t)
-	modules := s.modules(&mailbox{}, nil)
-	sh := &shop{s: s, t: t, modules: modules, handler: app.NewRouter(routerDeps(modules))}
+	mailer := &mailbox{}
+	modules := s.modules(mailer, nil)
+	sh := &shop{s: s, t: t, mailer: mailer, modules: modules, handler: app.NewRouter(routerDeps(modules))}
 	sh.owner = s.inviteStaff(t, sh.handler, "alfa", "dono@alfa.test", "owner")
 	sh.owner.base = "/staff"
 

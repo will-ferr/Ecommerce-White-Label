@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/catalog"
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/content"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/identity"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/sales"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/tenants"
@@ -38,12 +39,19 @@ type ModuleDeps struct {
 	Mailer   identity.Mailer
 	Auth     config.Auth
 	Commerce config.Commerce
+
+	// PlatformPool uses the platform database role. It is set only in the
+	// platform process, which serves the console (ADR-019).
+	PlatformPool *pgxpool.Pool
+	BaseDomain   string
 }
 
 // Modules holds the wired business modules.
 type Modules struct {
 	Sales    *sales.Module
 	Register func(chi.Router)
+	// RegisterPlatform adds the console routes. It is nil without a PlatformPool.
+	RegisterPlatform func(chi.Router)
 	// Subscriptions are the event consumers run by the worker.
 	Subscriptions []messaging.Subscription
 }
@@ -86,6 +94,7 @@ func BuildModules(deps ModuleDeps) (*Modules, error) {
 		}
 	}
 	catalogModule := catalog.New(deps.Pool, deps.Logger)
+	contentModule := content.New(deps.Pool, deps.Logger)
 	salesModule := sales.New(sales.Deps{
 		Pool: deps.Pool, Logger: deps.Logger, AccessKey: accessKey, TestPaymentKey: testPaymentKey,
 		PaymentTTL: deps.Commerce.PaymentTTL, CookieSecure: deps.Auth.CookieSecure, Mail: outbox, Links: deps.Auth.Links,
@@ -111,23 +120,46 @@ func BuildModules(deps ModuleDeps) (*Modules, error) {
 				tenantsModule.RegisterStorefrontRoutes(store)
 				store.Route("/auth", identityModule.RegisterCustomerRoutes)
 				catalogModule.RegisterStoreRoutes(store)
+				contentModule.RegisterStoreRoutes(store)
+				registerPrivacyRoutes(store, deps.Logger, identityModule, salesModule)
+				store.Method(http.MethodGet, "/storefront/sitemap", sitemapHandler(deps.Logger, tenantsModule, catalogModule, contentModule))
 				salesModule.RegisterStoreRoutes(store)
 			})
 
 			limited.Route("/staff", func(staff chi.Router) {
 				staff.Use(identityModule.StaffAuthentication())
 				identityModule.RegisterStaffRoutes(staff)
+				tenantsModule.RegisterStaffRoutes(staff)
 				catalogModule.RegisterAdminRoutes(staff)
+				contentModule.RegisterAdminRoutes(staff)
+				registerCustomerRoutes(staff, deps.Logger, identityModule)
 				salesModule.RegisterAdminRoutes(staff)
-			})
-			limited.Route("/platform", func(platform chi.Router) {
-				platform.Use(identityModule.PlatformAuthentication())
-				identityModule.RegisterPlatformRoutes(platform)
+				salesModule.RegisterReportRoutes(staff)
 			})
 		})
 	}
+
+	var registerPlatform func(chi.Router)
+	if deps.PlatformPool != nil {
+		console := tenants.NewConsole(deps.PlatformPool, deps.Logger, deps.BaseDomain, nil)
+		invitations := identity.NewStoreInvitations(deps.PlatformPool, mail.NewOutbox(deps.PlatformPool, sealer, deps.Logger),
+			deps.Auth.Links.AdminURL, deps.Logger)
+		registerPlatform = func(api chi.Router) {
+			api.Route("/platform", func(platform chi.Router) {
+				if deps.Limiter != nil {
+					platform.Use(deps.Limiter.Middleware("api:ip", requestsByIP, func(r *http.Request) string {
+						return reqctx.ClientIP(r.Context())
+					}))
+				}
+				platform.Use(identityModule.PlatformAuthentication())
+				identityModule.RegisterPlatformRoutes(platform)
+				console.RegisterPlatformRoutes(platform)
+				invitations.RegisterPlatformRoutes(platform)
+			})
+		}
+	}
 	return &Modules{
-		Sales: salesModule, Register: register,
+		Sales: salesModule, Register: register, RegisterPlatform: registerPlatform,
 		Subscriptions: []messaging.Subscription{
 			salesModule.Service().NotificationSubscription(),
 			salesModule.Service().RefundSubscription(),

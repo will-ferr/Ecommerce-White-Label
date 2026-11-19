@@ -24,7 +24,6 @@ import (
 
 // AdminOrders lists the orders of the store.
 func (s *Service) AdminOrders(ctx context.Context, filter OrderFilter) (pagination.Page[OrderView], error) {
-	filter.CustomerUserID = nil
 	return s.listOrders(ctx, filter)
 }
 

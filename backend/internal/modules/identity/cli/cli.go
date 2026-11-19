@@ -59,7 +59,7 @@ func (r *Runner) Run(ctx context.Context, args []string) error {
 		role = portal.TopRole
 	}
 
-	token, err := app.OperatorInvitation(ctx, r.pool, portal, tenantID, name, email, role)
+	token, err := app.OperatorInvitation(ctx, r.pool, portal, tenantID, name, email, role, nil)
 	if err != nil {
 		return err
 	}

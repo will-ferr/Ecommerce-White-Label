@@ -339,9 +339,14 @@ func (s *Service) ListAudit(ctx context.Context, principal authz.Principal) ([]a
 	return views, err
 }
 
-// OperatorInvitation creates the first accounts of a tenant from the operator
-// tool, which has no signed-in user. The pool must use the platform role.
-func OperatorInvitation(ctx context.Context, pool *pgxpool.Pool, portal Portal, tenantID uuid.UUID, rawName, rawEmail, roleCode string) (string, error) {
+// Deliver sends an invitation inside the transaction that creates it, so the
+// account exists only if the message was stored.
+type Deliver func(ctx context.Context, tx pgx.Tx, email, token string) error
+
+// OperatorInvitation creates the first accounts of a tenant on behalf of a
+// platform operator. The pool must use the platform role. A nil deliver
+// leaves the delivery to the caller, which receives the token.
+func OperatorInvitation(ctx context.Context, pool *pgxpool.Pool, portal Portal, tenantID uuid.UUID, rawName, rawEmail, roleCode string, deliver Deliver) (string, error) {
 	name, err := domain.NormalizeName(rawName)
 	if err != nil {
 		return "", err
@@ -369,8 +374,13 @@ func OperatorInvitation(ctx context.Context, pool *pgxpool.Pool, portal Portal, 
 		if err != nil {
 			return err
 		}
+		if deliver != nil {
+			if err := deliver(ctx, tx, email, token); err != nil {
+				return err
+			}
+		}
 		return audit.Record(ctx, tx, audit.Entry{
-			TenantID: tenantID, ActorType: audit.ActorOperator, ActorID: "tenantctl",
+			TenantID: tenantID, ActorType: audit.ActorOperator, ActorID: audit.OperatorFrom(ctx),
 			Action: "identity.member.invited", TargetType: "user", TargetID: userID.String(),
 			Metadata: map[string]string{"role": roleCode},
 		})

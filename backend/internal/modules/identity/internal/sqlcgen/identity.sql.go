@@ -188,6 +188,28 @@ func (q *Queries) EnableMFA(ctx context.Context, arg EnableMFAParams) error {
 	return err
 }
 
+const eraseUser = `-- name: EraseUser :execrows
+UPDATE identity.users
+SET email = 'erased+' || id::text || '@invalid', name = 'Conta excluída', password_hash = NULL,
+    email_verified_at = NULL, mfa_secret_encrypted = NULL, mfa_enabled_at = NULL, status = 'erased', updated_at = now()
+WHERE tenant_id = $1 AND id = $2 AND realm = 'customer' AND status <> 'erased'
+`
+
+type EraseUserParams struct {
+	TenantID uuid.UUID
+	ID       uuid.UUID
+}
+
+// Removes every personal field of a customer account. The row stays so
+// orders keep a consistent reference.
+func (q *Queries) EraseUser(ctx context.Context, arg EraseUserParams) (int64, error) {
+	result, err := q.db.Exec(ctx, eraseUser, arg.TenantID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getActiveSession = `-- name: GetActiveSession :one
 SELECT s.id, s.user_id
 FROM identity.sessions s
@@ -438,6 +460,21 @@ func (q *Queries) InsertUserToken(ctx context.Context, arg InsertUserTokenParams
 	return err
 }
 
+const invalidateAllUserTokens = `-- name: InvalidateAllUserTokens :exec
+UPDATE identity.user_tokens SET used_at = now()
+WHERE tenant_id = $1 AND user_id = $2 AND used_at IS NULL
+`
+
+type InvalidateAllUserTokensParams struct {
+	TenantID uuid.UUID
+	UserID   uuid.UUID
+}
+
+func (q *Queries) InvalidateAllUserTokens(ctx context.Context, arg InvalidateAllUserTokensParams) error {
+	_, err := q.db.Exec(ctx, invalidateAllUserTokens, arg.TenantID, arg.UserID)
+	return err
+}
+
 const invalidateUserTokens = `-- name: InvalidateUserTokens :exec
 UPDATE identity.user_tokens SET used_at = now()
 WHERE tenant_id = $1 AND user_id = $2 AND kind = $3 AND used_at IS NULL
@@ -537,6 +574,68 @@ func (q *Queries) ListActiveSessions(ctx context.Context, arg ListActiveSessions
 			&i.Ip,
 			&i.CreatedAt,
 			&i.LastUsedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCustomers = `-- name: ListCustomers :many
+SELECT id, email, name, status, email_verified_at, created_at
+FROM identity.users
+WHERE tenant_id = $1 AND realm = 'customer' AND status <> 'erased'
+  AND ($2::text IS NULL
+       OR email ILIKE '%' || $2 || '%' OR name ILIKE '%' || $2 || '%')
+  AND ($3::timestamptz IS NULL
+       OR (created_at, id) < ($3::timestamptz, $4::uuid))
+ORDER BY created_at DESC, id DESC
+LIMIT $5
+`
+
+type ListCustomersParams struct {
+	TenantID uuid.UUID
+	Search   *string
+	AfterAt  *time.Time
+	AfterID  *uuid.UUID
+	RowLimit int32
+}
+
+type ListCustomersRow struct {
+	ID              uuid.UUID
+	Email           string
+	Name            string
+	Status          string
+	EmailVerifiedAt *time.Time
+	CreatedAt       time.Time
+}
+
+func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error) {
+	rows, err := q.db.Query(ctx, listCustomers,
+		arg.TenantID,
+		arg.Search,
+		arg.AfterAt,
+		arg.AfterID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCustomersRow
+	for rows.Next() {
+		var i ListCustomersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.Status,
+			&i.EmailVerifiedAt,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

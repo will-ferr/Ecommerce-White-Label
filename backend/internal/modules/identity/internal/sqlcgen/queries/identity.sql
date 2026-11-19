@@ -169,3 +169,26 @@ JOIN identity.user_roles ur ON ur.tenant_id = u.tenant_id AND ur.user_id = u.id
 WHERE u.tenant_id = $1 AND u.status = 'active' AND ur.role_code = $2
 ORDER BY u.id
 FOR UPDATE OF u;
+
+-- name: EraseUser :execrows
+-- Removes every personal field of a customer account. The row stays so
+-- orders keep a consistent reference.
+UPDATE identity.users
+SET email = 'erased+' || id::text || '@invalid', name = 'Conta excluída', password_hash = NULL,
+    email_verified_at = NULL, mfa_secret_encrypted = NULL, mfa_enabled_at = NULL, status = 'erased', updated_at = now()
+WHERE tenant_id = $1 AND id = $2 AND realm = 'customer' AND status <> 'erased';
+
+-- name: InvalidateAllUserTokens :exec
+UPDATE identity.user_tokens SET used_at = now()
+WHERE tenant_id = $1 AND user_id = $2 AND used_at IS NULL;
+
+-- name: ListCustomers :many
+SELECT id, email, name, status, email_verified_at, created_at
+FROM identity.users
+WHERE tenant_id = $1 AND realm = 'customer' AND status <> 'erased'
+  AND (sqlc.narg('search')::text IS NULL
+       OR email ILIKE '%' || sqlc.narg('search') || '%' OR name ILIKE '%' || sqlc.narg('search') || '%')
+  AND (sqlc.narg('after_at')::timestamptz IS NULL
+       OR (created_at, id) < (sqlc.narg('after_at')::timestamptz, sqlc.narg('after_id')::uuid))
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg('row_limit');

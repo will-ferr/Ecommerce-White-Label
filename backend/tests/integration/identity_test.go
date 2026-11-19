@@ -95,6 +95,7 @@ func (s *suite) modules(mailer *mailbox, limiter *ratelimit.Limiter) *app.Module
 	modules, err := app.BuildModules(app.ModuleDeps{
 		Pool: s.runtime, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Limiter: limiter, Mailer: mailer,
 		Auth: testAuthConfig(), Commerce: config.Commerce{PaymentTTL: 30 * time.Minute, TestPayments: true},
+		PlatformPool: s.platform, BaseDomain: baseDomain,
 	})
 	if err != nil {
 		panic(err)
@@ -110,7 +111,13 @@ func routerDeps(modules *app.Modules) app.RouterDeps {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return app.RouterDeps{
 		Logger: logger, Health: health.NewService(logger, "test", time.Second),
-		RequestTimeout: 10 * time.Second, MaxBodyBytes: 1 << 16, RegisterAPI: modules.Register,
+		RequestTimeout: 10 * time.Second, MaxBodyBytes: 1 << 16, RegisterAPI: func(api chi.Router) {
+			// The store API and the platform API are separate processes; tests serve both.
+			modules.Register(api)
+			if modules.RegisterPlatform != nil {
+				modules.RegisterPlatform(api)
+			}
+		},
 	}
 }
 

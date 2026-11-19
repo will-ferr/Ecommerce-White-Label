@@ -128,6 +128,9 @@ func (s *Service) applyNotification(ctx context.Context, tx pgx.Tx, q *sqlcgen.Q
 			if err := inventory.Release(ctx, tx, tenantID, order.ID); err != nil {
 				return "", err
 			}
+			if err := releaseCoupon(ctx, q, tenantID, order.ID); err != nil {
+				return "", err
+			}
 			return outcomeFailed, s.changeStatus(ctx, tx, q, order, domain.Canceled, "", label+": pagamento recusado", system)
 		}
 	case payments.StatusRefunded:
@@ -140,6 +143,9 @@ func (s *Service) applyNotification(ctx context.Context, tx pgx.Tx, q *sqlcgen.Q
 			// when it still can be canceled.
 			if !wasPending && domain.CanTransition(order.Status, domain.Canceled) {
 				if err := inventory.Restock(ctx, tx, tenantID, order.ID, fmt.Sprintf("Pedido %d", order.Number)); err != nil {
+					return "", err
+				}
+				if err := releaseCoupon(ctx, q, tenantID, order.ID); err != nil {
 					return "", err
 				}
 				if err := s.changeStatus(ctx, tx, q, order, domain.Canceled, "", label+": pagamento estornado", system); err != nil {

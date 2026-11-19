@@ -27,3 +27,12 @@ func StoreName(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID) (string, erro
 	}
 	return settings.StoreName, nil
 }
+
+// StoreTimezone returns the timezone of a store, inside the transaction of the caller.
+func StoreTimezone(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID) (string, error) {
+	settings, err := sqlcgen.New(tx).GetSettings(ctx, tenantID)
+	if err != nil {
+		return "", fmt.Errorf("load store timezone: %w", err)
+	}
+	return settings.Timezone, nil
+}

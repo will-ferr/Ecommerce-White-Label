@@ -36,6 +36,22 @@ func (q *Queries) AddCartItem(ctx context.Context, arg AddCartItemParams) error 
 	return err
 }
 
+const addCouponUse = `-- name: AddCouponUse :exec
+UPDATE promotions.coupons SET used_count = used_count + $3::integer, updated_at = now()
+WHERE tenant_id = $1 AND id = $2
+`
+
+type AddCouponUseParams struct {
+	TenantID uuid.UUID
+	ID       uuid.UUID
+	Delta    int32
+}
+
+func (q *Queries) AddCouponUse(ctx context.Context, arg AddCouponUseParams) error {
+	_, err := q.db.Exec(ctx, addCouponUse, arg.TenantID, arg.ID, arg.Delta)
+	return err
+}
+
 const claimIdempotencyKey = `-- name: ClaimIdempotencyKey :execrows
 
 INSERT INTO checkout.idempotency_keys (tenant_id, scope, key, request_hash) VALUES ($1, $2, $3, $4)
@@ -109,6 +125,24 @@ func (q *Queries) CountCartLines(ctx context.Context, arg CountCartLinesParams) 
 	return column_1, err
 }
 
+const countCustomerRedemptions = `-- name: CountCustomerRedemptions :one
+SELECT count(*)::integer FROM promotions.redemptions
+WHERE tenant_id = $1 AND coupon_id = $2 AND customer_email = $3 AND status = 'applied'
+`
+
+type CountCustomerRedemptionsParams struct {
+	TenantID      uuid.UUID
+	CouponID      uuid.UUID
+	CustomerEmail string
+}
+
+func (q *Queries) CountCustomerRedemptions(ctx context.Context, arg CountCustomerRedemptionsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countCustomerRedemptions, arg.TenantID, arg.CouponID, arg.CustomerEmail)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const deleteAddress = `-- name: DeleteAddress :execrows
 DELETE FROM customers.addresses WHERE tenant_id = $1 AND user_id = $2 AND id = $3
 `
@@ -142,6 +176,37 @@ func (q *Queries) DeleteCartItem(ctx context.Context, arg DeleteCartItemParams) 
 	return err
 }
 
+const deleteCustomerAddresses = `-- name: DeleteCustomerAddresses :exec
+
+DELETE FROM customers.addresses WHERE tenant_id = $1 AND user_id = $2
+`
+
+type DeleteCustomerAddressesParams struct {
+	TenantID uuid.UUID
+	UserID   uuid.UUID
+}
+
+// Privacy.
+func (q *Queries) DeleteCustomerAddresses(ctx context.Context, arg DeleteCustomerAddressesParams) error {
+	_, err := q.db.Exec(ctx, deleteCustomerAddresses, arg.TenantID, arg.UserID)
+	return err
+}
+
+const deleteCustomerCartItems = `-- name: DeleteCustomerCartItems :exec
+DELETE FROM cart.items i USING cart.carts c
+WHERE c.tenant_id = i.tenant_id AND c.id = i.cart_id AND c.tenant_id = $1 AND c.user_id = $2
+`
+
+type DeleteCustomerCartItemsParams struct {
+	TenantID uuid.UUID
+	UserID   *uuid.UUID
+}
+
+func (q *Queries) DeleteCustomerCartItems(ctx context.Context, arg DeleteCustomerCartItemsParams) error {
+	_, err := q.db.Exec(ctx, deleteCustomerCartItems, arg.TenantID, arg.UserID)
+	return err
+}
+
 const deleteShippingRates = `-- name: DeleteShippingRates :exec
 DELETE FROM shipping.rates WHERE tenant_id = $1 AND method_id = $2
 `
@@ -153,6 +218,34 @@ type DeleteShippingRatesParams struct {
 
 func (q *Queries) DeleteShippingRates(ctx context.Context, arg DeleteShippingRatesParams) error {
 	_, err := q.db.Exec(ctx, deleteShippingRates, arg.TenantID, arg.MethodID)
+	return err
+}
+
+const detachCustomerCarts = `-- name: DetachCustomerCarts :exec
+UPDATE cart.carts SET user_id = NULL, status = 'merged', updated_at = now() WHERE tenant_id = $1 AND user_id = $2
+`
+
+type DetachCustomerCartsParams struct {
+	TenantID uuid.UUID
+	UserID   *uuid.UUID
+}
+
+func (q *Queries) DetachCustomerCarts(ctx context.Context, arg DetachCustomerCartsParams) error {
+	_, err := q.db.Exec(ctx, detachCustomerCarts, arg.TenantID, arg.UserID)
+	return err
+}
+
+const detachCustomerOrders = `-- name: DetachCustomerOrders :exec
+UPDATE orders.orders SET customer_user_id = NULL, updated_at = now() WHERE tenant_id = $1 AND customer_user_id = $2
+`
+
+type DetachCustomerOrdersParams struct {
+	TenantID       uuid.UUID
+	CustomerUserID *uuid.UUID
+}
+
+func (q *Queries) DetachCustomerOrders(ctx context.Context, arg DetachCustomerOrdersParams) error {
+	_, err := q.db.Exec(ctx, detachCustomerOrders, arg.TenantID, arg.CustomerUserID)
 	return err
 }
 
@@ -206,6 +299,38 @@ func (q *Queries) GetActiveCartByUser(ctx context.Context, arg GetActiveCartByUs
 	return i, err
 }
 
+const getCouponByCode = `-- name: GetCouponByCode :one
+SELECT tenant_id, id, code, description, kind, value, min_subtotal, starts_at, ends_at, usage_limit, per_customer_limit, used_count, active, created_at, updated_at FROM promotions.coupons WHERE tenant_id = $1 AND code = $2
+`
+
+type GetCouponByCodeParams struct {
+	TenantID uuid.UUID
+	Code     string
+}
+
+func (q *Queries) GetCouponByCode(ctx context.Context, arg GetCouponByCodeParams) (PromotionsCoupon, error) {
+	row := q.db.QueryRow(ctx, getCouponByCode, arg.TenantID, arg.Code)
+	var i PromotionsCoupon
+	err := row.Scan(
+		&i.TenantID,
+		&i.ID,
+		&i.Code,
+		&i.Description,
+		&i.Kind,
+		&i.Value,
+		&i.MinSubtotal,
+		&i.StartsAt,
+		&i.EndsAt,
+		&i.UsageLimit,
+		&i.PerCustomerLimit,
+		&i.UsedCount,
+		&i.Active,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getIdempotencyKey = `-- name: GetIdempotencyKey :one
 SELECT request_hash, response FROM checkout.idempotency_keys WHERE tenant_id = $1 AND scope = $2 AND key = $3
 `
@@ -229,7 +354,7 @@ func (q *Queries) GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyPa
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at, store_host FROM orders.orders WHERE tenant_id = $1 AND id = $2
+SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at, store_host, coupon_code FROM orders.orders WHERE tenant_id = $1 AND id = $2
 `
 
 type GetOrderParams struct {
@@ -263,12 +388,13 @@ func (q *Queries) GetOrder(ctx context.Context, arg GetOrderParams) (OrdersOrder
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.StoreHost,
+		&i.CouponCode,
 	)
 	return i, err
 }
 
 const getOrderByNumber = `-- name: GetOrderByNumber :one
-SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at, store_host FROM orders.orders WHERE tenant_id = $1 AND number = $2
+SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at, store_host, coupon_code FROM orders.orders WHERE tenant_id = $1 AND number = $2
 `
 
 type GetOrderByNumberParams struct {
@@ -302,6 +428,7 @@ func (q *Queries) GetOrderByNumber(ctx context.Context, arg GetOrderByNumberPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.StoreHost,
+		&i.CouponCode,
 	)
 	return i, err
 }
@@ -449,11 +576,50 @@ func (q *Queries) InsertCart(ctx context.Context, arg InsertCartParams) error {
 	return err
 }
 
+const insertCoupon = `-- name: InsertCoupon :exec
+INSERT INTO promotions.coupons (tenant_id, id, code, description, kind, value, min_subtotal, starts_at, ends_at, usage_limit, per_customer_limit, active)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+`
+
+type InsertCouponParams struct {
+	TenantID         uuid.UUID
+	ID               uuid.UUID
+	Code             string
+	Description      string
+	Kind             string
+	Value            int64
+	MinSubtotal      int64
+	StartsAt         *time.Time
+	EndsAt           *time.Time
+	UsageLimit       *int32
+	PerCustomerLimit *int32
+	Active           bool
+}
+
+func (q *Queries) InsertCoupon(ctx context.Context, arg InsertCouponParams) error {
+	_, err := q.db.Exec(ctx, insertCoupon,
+		arg.TenantID,
+		arg.ID,
+		arg.Code,
+		arg.Description,
+		arg.Kind,
+		arg.Value,
+		arg.MinSubtotal,
+		arg.StartsAt,
+		arg.EndsAt,
+		arg.UsageLimit,
+		arg.PerCustomerLimit,
+		arg.Active,
+	)
+	return err
+}
+
 const insertOrder = `-- name: InsertOrder :exec
 INSERT INTO orders.orders (
   tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address,
-  shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, payment_due_at, store_host
-) VALUES ($1, $2, $3, 'pending_payment', $4, $5, $6, $7, $8, $9, $10, 0, 0, $11, $12, $13, $14)
+  shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, payment_due_at, store_host,
+  coupon_code
+) VALUES ($1, $2, $3, 'pending_payment', $4, $5, $6, $7, $8, $9, $10, $15, 0, $11, $12, $13, $14, $16)
 `
 
 type InsertOrderParams struct {
@@ -471,6 +637,8 @@ type InsertOrderParams struct {
 	Currency        string
 	PaymentDueAt    time.Time
 	StoreHost       string
+	DiscountAmount  int64
+	CouponCode      string
 }
 
 func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) error {
@@ -489,6 +657,8 @@ func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) error 
 		arg.Currency,
 		arg.PaymentDueAt,
 		arg.StoreHost,
+		arg.DiscountAmount,
+		arg.CouponCode,
 	)
 	return err
 }
@@ -602,6 +772,32 @@ func (q *Queries) InsertPaymentTransaction(ctx context.Context, arg InsertPaymen
 		arg.Kind,
 		arg.Amount,
 		arg.ProviderReference,
+	)
+	return err
+}
+
+const insertRedemption = `-- name: InsertRedemption :exec
+INSERT INTO promotions.redemptions (tenant_id, id, coupon_id, order_id, customer_email, discount_amount, status)
+VALUES ($1, $2, $3, $4, $5, $6, 'applied')
+`
+
+type InsertRedemptionParams struct {
+	TenantID       uuid.UUID
+	ID             uuid.UUID
+	CouponID       uuid.UUID
+	OrderID        uuid.UUID
+	CustomerEmail  string
+	DiscountAmount int64
+}
+
+func (q *Queries) InsertRedemption(ctx context.Context, arg InsertRedemptionParams) error {
+	_, err := q.db.Exec(ctx, insertRedemption,
+		arg.TenantID,
+		arg.ID,
+		arg.CouponID,
+		arg.OrderID,
+		arg.CustomerEmail,
+		arg.DiscountAmount,
 	)
 	return err
 }
@@ -810,6 +1006,48 @@ func (q *Queries) ListCartItems(ctx context.Context, arg ListCartItemsParams) ([
 	return items, nil
 }
 
+const listCoupons = `-- name: ListCoupons :many
+
+SELECT tenant_id, id, code, description, kind, value, min_subtotal, starts_at, ends_at, usage_limit, per_customer_limit, used_count, active, created_at, updated_at FROM promotions.coupons WHERE tenant_id = $1 ORDER BY created_at DESC, id DESC
+`
+
+// Coupons.
+func (q *Queries) ListCoupons(ctx context.Context, tenantID uuid.UUID) ([]PromotionsCoupon, error) {
+	rows, err := q.db.Query(ctx, listCoupons, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PromotionsCoupon
+	for rows.Next() {
+		var i PromotionsCoupon
+		if err := rows.Scan(
+			&i.TenantID,
+			&i.ID,
+			&i.Code,
+			&i.Description,
+			&i.Kind,
+			&i.Value,
+			&i.MinSubtotal,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.UsageLimit,
+			&i.PerCustomerLimit,
+			&i.UsedCount,
+			&i.Active,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrderItems = `-- name: ListOrderItems :many
 SELECT tenant_id, id, order_id, variant_id, product_name, variant_label, sku, quantity, unit_amount, total_amount FROM orders.items WHERE tenant_id = $1 AND order_id = ANY($2::uuid[]) ORDER BY order_id, id
 `
@@ -887,7 +1125,7 @@ func (q *Queries) ListOrderNotes(ctx context.Context, arg ListOrderNotesParams) 
 }
 
 const listOrders = `-- name: ListOrders :many
-SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at, store_host
+SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at, store_host, coupon_code
 FROM orders.orders o
 WHERE o.tenant_id = $1
   AND ($2::text IS NULL OR o.status = $2)
@@ -951,6 +1189,7 @@ func (q *Queries) ListOrders(ctx context.Context, arg ListOrdersParams) ([]Order
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.StoreHost,
+			&i.CouponCode,
 		); err != nil {
 			return nil, err
 		}
@@ -1108,8 +1347,40 @@ func (q *Queries) LockCart(ctx context.Context, arg LockCartParams) (CartCart, e
 	return i, err
 }
 
+const lockCouponByCode = `-- name: LockCouponByCode :one
+SELECT tenant_id, id, code, description, kind, value, min_subtotal, starts_at, ends_at, usage_limit, per_customer_limit, used_count, active, created_at, updated_at FROM promotions.coupons WHERE tenant_id = $1 AND code = $2 FOR UPDATE
+`
+
+type LockCouponByCodeParams struct {
+	TenantID uuid.UUID
+	Code     string
+}
+
+func (q *Queries) LockCouponByCode(ctx context.Context, arg LockCouponByCodeParams) (PromotionsCoupon, error) {
+	row := q.db.QueryRow(ctx, lockCouponByCode, arg.TenantID, arg.Code)
+	var i PromotionsCoupon
+	err := row.Scan(
+		&i.TenantID,
+		&i.ID,
+		&i.Code,
+		&i.Description,
+		&i.Kind,
+		&i.Value,
+		&i.MinSubtotal,
+		&i.StartsAt,
+		&i.EndsAt,
+		&i.UsageLimit,
+		&i.PerCustomerLimit,
+		&i.UsedCount,
+		&i.Active,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const lockOrder = `-- name: LockOrder :one
-SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at, store_host FROM orders.orders WHERE tenant_id = $1 AND id = $2 FOR UPDATE
+SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at, store_host, coupon_code FROM orders.orders WHERE tenant_id = $1 AND id = $2 FOR UPDATE
 `
 
 type LockOrderParams struct {
@@ -1143,6 +1414,7 @@ func (q *Queries) LockOrder(ctx context.Context, arg LockOrderParams) (OrdersOrd
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.StoreHost,
+		&i.CouponCode,
 	)
 	return i, err
 }
@@ -1249,6 +1521,155 @@ func (q *Queries) NextOrderNumber(ctx context.Context, tenantID uuid.UUID) (int6
 	return next_number, err
 }
 
+const releaseRedemption = `-- name: ReleaseRedemption :one
+UPDATE promotions.redemptions SET status = 'released'
+WHERE tenant_id = $1 AND order_id = $2 AND status = 'applied'
+RETURNING coupon_id
+`
+
+type ReleaseRedemptionParams struct {
+	TenantID uuid.UUID
+	OrderID  uuid.UUID
+}
+
+func (q *Queries) ReleaseRedemption(ctx context.Context, arg ReleaseRedemptionParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, releaseRedemption, arg.TenantID, arg.OrderID)
+	var coupon_id uuid.UUID
+	err := row.Scan(&coupon_id)
+	return coupon_id, err
+}
+
+const reportDaily = `-- name: ReportDaily :many
+SELECT to_char(created_at AT TIME ZONE $2::text, 'YYYY-MM-DD')::text AS day,
+       count(*)::integer AS orders, sum(total_amount)::bigint AS revenue
+FROM orders.orders
+WHERE tenant_id = $1 AND created_at >= $3 AND created_at < $4
+  AND status NOT IN ('pending_payment', 'canceled')
+GROUP BY 1
+ORDER BY 1
+`
+
+type ReportDailyParams struct {
+	TenantID uuid.UUID
+	Timezone string
+	FromAt   time.Time
+	ToAt     time.Time
+}
+
+type ReportDailyRow struct {
+	Day     string
+	Orders  int32
+	Revenue int64
+}
+
+func (q *Queries) ReportDaily(ctx context.Context, arg ReportDailyParams) ([]ReportDailyRow, error) {
+	rows, err := q.db.Query(ctx, reportDaily,
+		arg.TenantID,
+		arg.Timezone,
+		arg.FromAt,
+		arg.ToAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ReportDailyRow
+	for rows.Next() {
+		var i ReportDailyRow
+		if err := rows.Scan(&i.Day, &i.Orders, &i.Revenue); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportTopProducts = `-- name: ReportTopProducts :many
+SELECT i.product_name, sum(i.quantity)::integer AS quantity, sum(i.total_amount)::bigint AS revenue
+FROM orders.items i
+JOIN orders.orders o ON o.tenant_id = i.tenant_id AND o.id = i.order_id
+WHERE o.tenant_id = $1 AND o.created_at >= $2 AND o.created_at < $3
+  AND o.status NOT IN ('pending_payment', 'canceled')
+GROUP BY i.product_name
+ORDER BY revenue DESC, i.product_name
+LIMIT 10
+`
+
+type ReportTopProductsParams struct {
+	TenantID uuid.UUID
+	FromAt   time.Time
+	ToAt     time.Time
+}
+
+type ReportTopProductsRow struct {
+	ProductName string
+	Quantity    int32
+	Revenue     int64
+}
+
+func (q *Queries) ReportTopProducts(ctx context.Context, arg ReportTopProductsParams) ([]ReportTopProductsRow, error) {
+	rows, err := q.db.Query(ctx, reportTopProducts, arg.TenantID, arg.FromAt, arg.ToAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ReportTopProductsRow
+	for rows.Next() {
+		var i ReportTopProductsRow
+		if err := rows.Scan(&i.ProductName, &i.Quantity, &i.Revenue); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportTotals = `-- name: ReportTotals :one
+
+SELECT
+  count(*) FILTER (WHERE status NOT IN ('pending_payment', 'canceled'))::integer AS paid_orders,
+  coalesce(sum(total_amount) FILTER (WHERE status NOT IN ('pending_payment', 'canceled')), 0)::bigint AS revenue,
+  coalesce(sum(discount_amount) FILTER (WHERE status NOT IN ('pending_payment', 'canceled')), 0)::bigint AS discounts,
+  count(*) FILTER (WHERE status = 'canceled')::integer AS canceled_orders,
+  count(*)::integer AS all_orders
+FROM orders.orders
+WHERE tenant_id = $1 AND created_at >= $2 AND created_at < $3
+`
+
+type ReportTotalsParams struct {
+	TenantID uuid.UUID
+	FromAt   time.Time
+	ToAt     time.Time
+}
+
+type ReportTotalsRow struct {
+	PaidOrders     int32
+	Revenue        int64
+	Discounts      int64
+	CanceledOrders int32
+	AllOrders      int32
+}
+
+// Reports. Orders count as sales once paid, so pending and canceled orders are left out.
+func (q *Queries) ReportTotals(ctx context.Context, arg ReportTotalsParams) (ReportTotalsRow, error) {
+	row := q.db.QueryRow(ctx, reportTotals, arg.TenantID, arg.FromAt, arg.ToAt)
+	var i ReportTotalsRow
+	err := row.Scan(
+		&i.PaidOrders,
+		&i.Revenue,
+		&i.Discounts,
+		&i.CanceledOrders,
+		&i.AllOrders,
+	)
+	return i, err
+}
+
 const saveIdempotencyResponse = `-- name: SaveIdempotencyResponse :exec
 UPDATE checkout.idempotency_keys SET response = $4 WHERE tenant_id = $1 AND scope = $2 AND key = $3
 `
@@ -1336,6 +1757,47 @@ type TouchCartParams struct {
 func (q *Queries) TouchCart(ctx context.Context, arg TouchCartParams) error {
 	_, err := q.db.Exec(ctx, touchCart, arg.TenantID, arg.ID)
 	return err
+}
+
+const updateCoupon = `-- name: UpdateCoupon :execrows
+UPDATE promotions.coupons
+SET description = $3, kind = $4, value = $5, min_subtotal = $6, starts_at = $7, ends_at = $8,
+    usage_limit = $9, per_customer_limit = $10, active = $11, updated_at = now()
+WHERE tenant_id = $1 AND id = $2
+`
+
+type UpdateCouponParams struct {
+	TenantID         uuid.UUID
+	ID               uuid.UUID
+	Description      string
+	Kind             string
+	Value            int64
+	MinSubtotal      int64
+	StartsAt         *time.Time
+	EndsAt           *time.Time
+	UsageLimit       *int32
+	PerCustomerLimit *int32
+	Active           bool
+}
+
+func (q *Queries) UpdateCoupon(ctx context.Context, arg UpdateCouponParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateCoupon,
+		arg.TenantID,
+		arg.ID,
+		arg.Description,
+		arg.Kind,
+		arg.Value,
+		arg.MinSubtotal,
+		arg.StartsAt,
+		arg.EndsAt,
+		arg.UsageLimit,
+		arg.PerCustomerLimit,
+		arg.Active,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateOrderStatus = `-- name: UpdateOrderStatus :exec

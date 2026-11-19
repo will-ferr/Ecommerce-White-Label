@@ -226,3 +226,6 @@ func (m *Module) RegisterAdminRoutes(router chi.Router) {
 		return httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": movements})
 	})
 }
+
+// Service returns the catalog use cases.
+func (m *Module) Service() *Service { return m.service }

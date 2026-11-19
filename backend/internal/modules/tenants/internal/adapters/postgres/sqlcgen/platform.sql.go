@@ -120,6 +120,41 @@ func (q *Queries) GetSettingsForUpdate(ctx context.Context, tenantID uuid.UUID) 
 	return i, err
 }
 
+const getTenantDetail = `-- name: GetTenantDetail :one
+SELECT t.id, t.slug, t.status, t.created_at, p.code AS plan_code, s.store_name, s.currency, s.seo_indexable
+FROM core.tenants t
+JOIN core.plans p ON p.id = t.plan_id
+JOIN core.tenant_settings s ON s.tenant_id = t.id
+WHERE t.slug = $1
+`
+
+type GetTenantDetailRow struct {
+	ID           uuid.UUID
+	Slug         string
+	Status       string
+	CreatedAt    time.Time
+	PlanCode     string
+	StoreName    string
+	Currency     string
+	SeoIndexable bool
+}
+
+func (q *Queries) GetTenantDetail(ctx context.Context, slug string) (GetTenantDetailRow, error) {
+	row := q.db.QueryRow(ctx, getTenantDetail, slug)
+	var i GetTenantDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Status,
+		&i.CreatedAt,
+		&i.PlanCode,
+		&i.StoreName,
+		&i.Currency,
+		&i.SeoIndexable,
+	)
+	return i, err
+}
+
 const insertDomain = `-- name: InsertDomain :exec
 INSERT INTO core.tenant_domains (host, tenant_id, kind, verification_token, verified_at)
 VALUES ($1, $2, $3, $4, $5)
@@ -212,8 +247,78 @@ func (q *Queries) InsertThemeVersion(ctx context.Context, arg InsertThemeVersion
 	return err
 }
 
+const listPlans = `-- name: ListPlans :many
+SELECT code, name FROM core.plans ORDER BY code
+`
+
+type ListPlansRow struct {
+	Code string
+	Name string
+}
+
+func (q *Queries) ListPlans(ctx context.Context) ([]ListPlansRow, error) {
+	rows, err := q.db.Query(ctx, listPlans)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPlansRow
+	for rows.Next() {
+		var i ListPlansRow
+		if err := rows.Scan(&i.Code, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTenantDomains = `-- name: ListTenantDomains :many
+SELECT host, kind, verification_token, verified_at, created_at
+FROM core.tenant_domains
+WHERE tenant_id = $1
+ORDER BY kind DESC, host
+`
+
+type ListTenantDomainsRow struct {
+	Host              string
+	Kind              string
+	VerificationToken *string
+	VerifiedAt        *time.Time
+	CreatedAt         time.Time
+}
+
+func (q *Queries) ListTenantDomains(ctx context.Context, tenantID uuid.UUID) ([]ListTenantDomainsRow, error) {
+	rows, err := q.db.Query(ctx, listTenantDomains, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTenantDomainsRow
+	for rows.Next() {
+		var i ListTenantDomainsRow
+		if err := rows.Scan(
+			&i.Host,
+			&i.Kind,
+			&i.VerificationToken,
+			&i.VerifiedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTenants = `-- name: ListTenants :many
-SELECT t.slug, t.status, p.code AS plan_code, s.store_name
+SELECT t.slug, t.status, p.code AS plan_code, s.store_name, t.created_at
 FROM core.tenants t
 JOIN core.plans p ON p.id = t.plan_id
 JOIN core.tenant_settings s ON s.tenant_id = t.id
@@ -225,6 +330,7 @@ type ListTenantsRow struct {
 	Status    string
 	PlanCode  string
 	StoreName string
+	CreatedAt time.Time
 }
 
 func (q *Queries) ListTenants(ctx context.Context) ([]ListTenantsRow, error) {
@@ -241,6 +347,7 @@ func (q *Queries) ListTenants(ctx context.Context) ([]ListTenantsRow, error) {
 			&i.Status,
 			&i.PlanCode,
 			&i.StoreName,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
