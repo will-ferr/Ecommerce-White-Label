@@ -76,7 +76,7 @@ export interface Cart {
 export interface ShippingOption {
   id: string
   name: string
-  kind: 'pickup' | 'flat'
+  kind: 'pickup' | 'flat' | 'table'
   price: number
   minDays: number
   maxDays: number
@@ -92,6 +92,8 @@ export interface CheckoutSummary {
   total: number
   currency: string
   paymentLabel: string
+  /** The store uses the test provider: nothing is charged. */
+  testPayment: boolean
 }
 
 export interface Address {
@@ -204,8 +206,19 @@ export interface AdminProduct {
 
 export type ProductInput = Omit<AdminProduct, 'id' | 'version'> & { version?: number }
 
+/** One line of a shipping table: the price for parcels up to a weight sent to a range of CEPs. */
+export interface ShippingRate {
+  postalCodeStart: string
+  postalCodeEnd: string
+  maxWeightGrams: number
+  price: number
+  minDays: number
+  maxDays: number
+}
+
 export interface ShippingMethod extends ShippingOption {
   active: boolean
+  rates: ShippingRate[]
 }
 
 /** Sends one request and returns the decoded answer. */
@@ -235,7 +248,8 @@ export function createStoreClient(send: Sender) {
     setItem: (variantId: string, quantity: number) => send<Cart>('PUT', `/cart/items/${segment(variantId)}`, { quantity }),
     removeItem: (variantId: string) => send<Cart>('DELETE', `/cart/items/${segment(variantId)}`),
     mergeCart: () => send<Cart>('POST', '/cart/merge', {}),
-    summary: (shippingMethodId?: string) => send<CheckoutSummary>('POST', '/checkout/summary', { shippingMethodId: shippingMethodId ?? null }),
+    summary: (shippingMethodId?: string, postalCode?: string) =>
+      send<CheckoutSummary>('POST', '/checkout/summary', { shippingMethodId: shippingMethodId ?? null, postalCode: postalCode ?? '' }),
     placeOrder: (input: CheckoutInput, idempotencyKey: string) =>
       send<PlacedOrder>('POST', '/checkout/orders', input, { 'Idempotency-Key': idempotencyKey }),
     order: (number: number, token?: string) => send<Order>('GET', `/orders/${segment(number)}${query({ token })}`),

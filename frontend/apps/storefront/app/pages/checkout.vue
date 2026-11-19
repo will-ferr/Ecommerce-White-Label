@@ -28,13 +28,29 @@ function useAddress(saved: SavedAddress) {
   })
 }
 
+// Options priced by CEP appear once the CEP is complete.
+const postalDigits = computed(() => {
+  const digits = address.postalCode.replace(/\D/g, '')
+  return digits.length === 8 ? digits : ''
+})
+
 async function refresh() {
-  summary.value = await api.summary(shippingId.value || undefined)
-  if (!shippingId.value && summary.value.shippingOptions[0]) {
+  summary.value = await api.summary(shippingId.value || undefined, postalDigits.value)
+  const offered = summary.value.shippingOptions.some((option) => option.id === shippingId.value)
+  if (!offered && summary.value.shippingOptions[0]) {
     shippingId.value = summary.value.shippingOptions[0].id
-    summary.value = await api.summary(shippingId.value)
+    summary.value = await api.summary(shippingId.value, postalDigits.value)
   }
 }
+
+watch(postalDigits, async () => {
+  if (!summary.value) return
+  try {
+    await refresh()
+  } catch (error) {
+    failure.value = errorMessage(error)
+  }
+})
 
 onMounted(async () => {
   try {
@@ -159,7 +175,9 @@ async function submit() {
 
           <fieldset class="space-y-3 rounded-card border border-line bg-surface p-5 sm:p-6">
             <legend class="px-1 font-display text-2xl text-ink">Entrega</legend>
-            <p v-if="!summary.shippingOptions.length" class="text-danger">Esta loja ainda não configurou formas de entrega.</p>
+            <p v-if="!summary.shippingOptions.length && !postalDigits" class="text-muted">Informe o CEP para ver as formas de entrega.</p>
+            <p v-else-if="!summary.shippingOptions.length" class="text-danger">Não há forma de entrega para este CEP.</p>
+            <p v-else-if="!postalDigits" class="text-sm text-muted">Outras opções podem aparecer depois que você informar o CEP.</p>
             <label v-for="option in summary.shippingOptions" :key="option.id" class="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-control border border-line p-3">
               <span class="flex items-center gap-3">
                 <input v-model="shippingId" type="radio" name="shipping" :value="option.id" class="size-5 accent-[var(--wl-color-primary)]" />
@@ -172,10 +190,11 @@ async function submit() {
             </label>
           </fieldset>
 
-          <section class="space-y-2 rounded-card border border-warning/40 bg-warning-soft p-5 text-warning" aria-labelledby="payment-title">
+          <section v-if="summary.testPayment" class="space-y-2 rounded-card border border-warning/40 bg-warning-soft p-5 text-warning" aria-labelledby="payment-title">
             <h2 id="payment-title" class="font-semibold">{{ summary.paymentLabel }}</h2>
             <p class="text-sm">Ambiente de demonstração: nenhum valor é cobrado. Você poderá aprovar ou recusar o pagamento na página do pedido.</p>
           </section>
+          <UiAlert v-else-if="!summary.paymentLabel" title="Esta loja ainda não está recebendo pagamentos." />
         </div>
 
         <aside class="h-fit space-y-4 rounded-card border border-line bg-surface p-5" aria-label="Resumo do pedido">
@@ -192,7 +211,7 @@ async function submit() {
             <div class="flex justify-between text-lg font-semibold"><dt>Total</dt><dd data-testid="checkout-total">{{ money(summary.total) }}</dd></div>
           </dl>
           <p class="text-xs text-muted">Impostos não calculados: a configuração fiscal da loja ainda não foi validada.</p>
-          <UiButton type="submit" class="w-full" :disabled="busy || !summary.shipping || summary.cart.hasUnavailable">
+          <UiButton type="submit" class="w-full" :disabled="busy || !summary.shipping || !summary.paymentLabel || summary.cart.hasUnavailable">
             {{ busy ? 'Enviando…' : 'Confirmar pedido' }}
           </UiButton>
         </aside>

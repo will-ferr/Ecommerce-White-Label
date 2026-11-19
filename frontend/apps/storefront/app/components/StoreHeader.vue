@@ -6,6 +6,18 @@ const props = defineProps<{ name: string; logoUrl: string; layout: 'classic' | '
 const logo = computed(() => safeAssetUrl(props.logoUrl))
 const auth = useStoreAuth()
 const cart = useCartStore()
+const route = useRoute()
+const searchId = useId()
+const query = ref(typeof route.query.q === 'string' ? route.query.q : '')
+
+watch(() => route.query.q, (value) => {
+  query.value = typeof value === 'string' ? value : ''
+})
+
+async function search() {
+  const text = query.value.trim()
+  if (text) await navigateTo({ path: '/busca', query: { q: text } })
+}
 </script>
 
 <template>
@@ -30,5 +42,13 @@ const cart = useCartStore()
         </NuxtLink>
       </nav>
     </div>
+    <form role="search" action="/busca" method="get" class="mx-auto flex max-w-6xl gap-2 px-4 pb-3 sm:px-6" @submit.prevent="search">
+      <label :for="searchId" class="sr-only">Buscar produtos</label>
+      <input
+        :id="searchId" v-model="query" name="q" type="search" maxlength="100" placeholder="Buscar produtos"
+        class="block min-h-11 w-full min-w-0 rounded-control border border-muted bg-surface px-3 text-ink"
+      />
+      <button type="submit" class="min-h-11 shrink-0 rounded-control bg-primary px-4 font-semibold text-on-primary">Buscar</button>
+    </form>
   </header>
 </template>

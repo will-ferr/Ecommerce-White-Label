@@ -38,6 +38,7 @@ export const PAYMENT_STATUS_LABELS: Record<string, string> = {
   captured: 'aprovado',
   failed: 'recusado',
   canceled: 'cancelado',
+  refund_pending: 'estorno em andamento',
   refunded: 'estornado',
 }
 
