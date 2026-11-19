@@ -34,4 +34,6 @@ Alertas indicam impacto ao usuário ou risco iminente, e cada um terá um runboo
 
 Os alertas de consumo de orçamento seguem o método de múltiplas janelas, que reduz alarmes falsos e detecta tanto falhas rápidas quanto degradações lentas.
 
+Métricas já emitidas para estes alertas: `messaging_outbox_lag_seconds`, `messaging_events_consumed_total` (por consumidor e resultado, incluindo `dead`) e `mail_messages_total` (por tipo e resultado). As regras do Prometheus entram na Fase 8.
+
 Alertas não incluem dados pessoais e trazem links para o dashboard e para o runbook correspondente.

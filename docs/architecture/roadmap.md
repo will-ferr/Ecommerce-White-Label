@@ -21,7 +21,7 @@ flowchart LR
 | **3. Multi-Tenant** | Tenants, domínios, RLS, configurações, temas, feature flags, frontend com tema dinâmico | Concluída. A gestão de lojas pelo painel fica para a Fase 7 |
 | **4. Identidade** | Cadastro, login, recuperação, MFA, sessões, RBAC, auditoria, rate limit | Concluída. E-mails são enviados em segundo plano pela própria API até a mensageria da Fase 6 |
 | **5. Núcleo comercial** | Produtos, categorias, estoque, preços, clientes, carrinho, checkout, pedidos e loja navegável | Concluída (ADR-017). Gateways, transportadoras, impostos, listas de preço e busca avançada ficam para as Fases 6 e 7 |
-| **6. Integrações** | RabbitMQ e Outbox em produção interna, um gateway real em sandbox, webhooks, frete, e-mail, busca | Fluxo validado no sandbox real; webhook duplicado não gera efeito duplo; DLQ funcionando |
+| **6. Integrações** | RabbitMQ e Outbox em produção interna, um gateway real em sandbox, webhooks, frete, e-mail, busca | Concluída, exceto o sandbox real (ADR-018): webhook duplicado sem efeito duplo e DLQ testados com RabbitMQ real. A validação no sandbox depende da escolha do gateway |
 | **7. Administração** | Console da plataforma, admin da loja, promoções, CMS, SEO, relatórios, LGPD | Operação de uma loja sem acesso ao banco; testes E2E e de acessibilidade |
 | **8. Observabilidade e segurança avançada** | Dashboards, alertas, runbooks, ZAP, k6, teste de restauração | Capacidade medida e documentada; achados altos de segurança resolvidos |
 | **9. Produção** | CI/CD completo, Kubernetes, backups, disaster recovery, resposta a incidentes, revisão de segurança | Deploy e rollback ensaiados; restauração medida; pentest externo concluído |

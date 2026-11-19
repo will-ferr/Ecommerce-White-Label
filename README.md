@@ -2,7 +2,7 @@
 
 Plataforma SaaS de e-commerce multi-tenant: um único backend e um único frontend atendem várias lojas isoladas, cada uma com identidade própria.
 
-**Estado atual:** Fase 5 (núcleo comercial). Cada loja tem domínio, tema, contas, equipe, catálogo, estoque, carrinho, checkout e pedidos próprios. O pagamento ainda é o provedor de teste, identificado como tal. Gateways e transportadoras reais chegam na Fase 6.
+**Estado atual:** Fase 6 (integrações). Cada loja tem domínio, tema, contas, equipe, catálogo com busca, estoque, carrinho, checkout, pedidos, frete por tabela e e-mails próprios. Eventos passam por outbox e RabbitMQ, e pagamentos são confirmados por webhooks assinados. O único provedor de pagamento ainda é o de teste, identificado como tal: o gateway real depende da escolha do provedor.
 
 | Camada | Tecnologias |
 | --- | --- |

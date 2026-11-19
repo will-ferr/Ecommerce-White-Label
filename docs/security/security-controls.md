@@ -37,6 +37,7 @@ Referências: OWASP ASVS e OWASP Top 10. Este documento descreve controles técn
 | Payload excessivo | Limite de corpo por rota, timeouts de leitura e escrita, limite de concorrência |
 | Upload malicioso | URL pré-assinada, verificação do tipo real, reprocessamento de imagens, domínio separado |
 | Erros | Formato RFC 9457 sem detalhes internos; `correlation_id` para suporte |
+| Webhook forjado ou repetido | Assinatura verificada pelo provedor, validade curta, chave única por evento e conferência do valor (ADR-018) |
 
 Cabeçalhos padrão: `Strict-Transport-Security`, `Content-Security-Policy`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` e `frame-ancestors`.
 
@@ -50,6 +51,7 @@ CORS é fechado por padrão. O storefront usa a mesma origem da API, e os painé
 | Credenciais de gateway | Envelope encryption por tenant, usando KMS |
 | CPF e CNPJ | Cifrados, com índice cego para busca exata |
 | Senhas e tokens | Apenas hash |
+| E-mails pendentes | Cifrados com AES-GCM até a entrega e apagados depois; erros de SMTP sem endereços |
 | Tráfego | TLS 1.2 ou superior, inclusive entre serviços quando a rede não for confiável |
 | Em repouso | Criptografia de disco e de backups |
 

@@ -428,7 +428,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Calcula itens, frete e total no servidor */
+        /**
+         * Calcula itens, frete e total no servidor
+         * @description Corpo com shippingMethodId e postalCode opcionais. Formas de entrega por tabela só aparecem quando o CEP é informado e uma faixa cobre o destino e o peso.
+         */
         post: operations["checkoutSummary"];
         delete?: never;
         options?: never;
@@ -450,6 +453,26 @@ export interface paths {
          * @description Exige o cabeçalho Idempotency-Key. Repetições com a mesma chave devolvem o mesmo pedido. Se preço ou estoque mudaram, responde 409 com PRICE_CHANGED ou OUT_OF_STOCK e o resumo atualizado.
          */
         post: operations["placeOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/payments/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recebe uma notificação assinada de um provedor de pagamento
+         * @description A loja é identificada pelo domínio. A assinatura é verificada pelo provedor (o provedor de teste usa o cabeçalho Test-Signature com HMAC-SHA256 e validade de 5 minutos). Uma notificação repetida responde com outcome duplicate e não tem efeito.
+         */
+        post: operations["receivePaymentNotification"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1514,6 +1537,47 @@ export interface operations {
         requestBody?: never;
         responses: {
             201: components["responses"]["CommerceObject"];
+            default: components["responses"]["Error"];
+        };
+    };
+    receivePaymentNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Notificação aplicada ou ignorada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        outcome: "captured" | "failed" | "refunded" | "duplicate" | "ignored" | "unknown_payment" | "amount_mismatch" | "late_capture_refund_requested";
+                    };
+                };
+            };
+            /** @description Assinatura inválida ou expirada (WEBHOOK_SIGNATURE_INVALID) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

@@ -419,6 +419,9 @@ paths:
       operationId: checkoutSummary
       tags: [Commerce]
       summary: Calcula itens, frete e total no servidor
+      description: >-
+        Corpo com shippingMethodId e postalCode opcionais. Formas de entrega por tabela só aparecem
+        quando o CEP é informado e uma faixa cobre o destino e o peso.
       responses:
         "200": { $ref: "#/components/responses/CommerceObject" }
         default: { $ref: "#/components/responses/Error" }
@@ -434,6 +437,41 @@ paths:
         - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
       responses:
         "201": { $ref: "#/components/responses/CommerceObject" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/webhooks/payments/{provider}:
+    post:
+      operationId: receivePaymentNotification
+      tags: [Commerce]
+      summary: Recebe uma notificação assinada de um provedor de pagamento
+      description: >-
+        A loja é identificada pelo domínio. A assinatura é verificada pelo provedor (o provedor de teste
+        usa o cabeçalho Test-Signature com HMAC-SHA256 e validade de 5 minutos). Uma notificação repetida
+        responde com outcome duplicate e não tem efeito.
+      parameters:
+        - { name: provider, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Notificação aplicada ou ignorada
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [outcome]
+                properties:
+                  outcome:
+                    type: string
+                    enum: [captured, failed, refunded, duplicate, ignored, unknown_payment, amount_mismatch, late_capture_refund_requested]
+        "401":
+          description: Assinatura inválida ou expirada (WEBHOOK_SIGNATURE_INVALID)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         default: { $ref: "#/components/responses/Error" }
   /api/v1/orders/{number}:
     get:

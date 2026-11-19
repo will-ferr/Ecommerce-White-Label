@@ -336,6 +336,17 @@ Os diagramas acima são o modelo-alvo. A migration `00004_commerce.sql` implemen
 
 Ainda não existem: marcas, listas de preço, mídia além de URLs de imagem, CPF cifrado, remessas com eventos de rastreio (o código de rastreio fica no pedido) e reembolsos parciais.
 
+### Implementado na Fase 6
+
+| Tabela | Função |
+| --- | --- |
+| `messaging.outbox`, `messaging.inbox` | Eventos a publicar e eventos já tratados por consumidor. A aplicação só insere; o relay usa funções `SECURITY DEFINER` |
+| `notifications.emails` | E-mails cifrados até a entrega, com tentativas e próximo envio |
+| `payments.webhook_events` | Notificações de pagamento, únicas por `(tenant_id, provider, provider_event_id)`, com o resultado aplicado. O corpo bruto não é guardado |
+| `shipping.rates` | Faixas de CEP e peso das formas de entrega do tipo `table` |
+
+Também mudaram: `payments.payments.status` aceita `refund_pending`, `orders.orders.store_host` guarda o domínio onde o pedido foi feito, e `catalog.product_document()` alimenta o índice de busca.
+
 ## 5. Tabelas transversais
 
 | Tabela | Função | Restrição principal |

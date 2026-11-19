@@ -90,3 +90,29 @@ Os eventos seguem o formato CloudEvents 1.0.
 | Publicação agendada | Publica conteúdo com data programada |
 
 Jobs são executados pelo Worker e usam advisory locks do PostgreSQL para evitar execução simultânea.
+
+## 6. Implementado na Fase 6
+
+O fluxo da seção 1 está em funcionamento (ADR-018), com o relay dentro do processo `worker`.
+
+| Evento | Produzido quando | Consumidores |
+| --- | --- | --- |
+| `orders.order.created.v1` | O checkout cria o pedido | `sales-notifications` |
+| `orders.order.paid.v1` | Uma notificação autenticada confirma o pagamento | `sales-notifications` |
+| `orders.order.shipped.v1` | A equipe marca o pedido como enviado | `sales-notifications` |
+| `orders.order.canceled.v1` | O pedido é cancelado pela equipe, pelo prazo ou pelo pagamento recusado | `sales-notifications` |
+| `payments.refund.requested.v1` | Um pedido pago é cancelado ou o pagamento chega depois do cancelamento | `sales-refunds` |
+| `payments.refund.completed.v1` | O provedor confirma o estorno | `sales-notifications` |
+
+Os demais eventos da seção 4 só passam a ser gravados quando tiverem um consumidor.
+
+Para cada consumidor existem as filas `<nome>` (quorum), `<nome>.retry.1` a `<nome>.retry.4` e `<nome>.dlq`. Para inspecionar e reprocessar a DLQ:
+
+```bash
+docker compose exec worker /app/worker dlq list --consumer sales-notifications
+docker compose exec worker /app/worker dlq replay --consumer sales-notifications --limit 10 --reason "Falha corrigida"
+```
+
+A listagem mostra tipo, loja, tentativas e erro, nunca o conteúdo do evento. O reprocessamento fica registrado na auditoria da plataforma.
+
+O job "Liberação de reservas" é feito pela expiração de pedidos, que libera o estoque reservado. "Conciliação de pagamentos" depende de um gateway real, e "Carrinhos abandonados" e "Publicação agendada" chegam com a Fase 7.

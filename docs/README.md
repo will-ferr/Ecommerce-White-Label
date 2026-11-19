@@ -1,6 +1,6 @@
 # Documentação da plataforma
 
-Fase atual: **5, Núcleo comercial**. Para executar o projeto, veja [Primeiros passos](development/getting-started.md). O contrato da API está em [openapi.yaml](api/openapi.yaml).
+Fase atual: **6, Integrações** (sandbox de gateway pendente de escolha do provedor). Para executar o projeto, veja [Primeiros passos](development/getting-started.md). O contrato da API está em [openapi.yaml](api/openapi.yaml).
 
 ## Entregas da Fase 1
 

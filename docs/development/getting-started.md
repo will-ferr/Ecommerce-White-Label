@@ -17,7 +17,7 @@ O último comando cria duas lojas de demonstração, cada uma com categorias, pr
 
 ### Compra de demonstração
 
-O ambiente local usa o **Pagamento de teste**, identificado como tal no checkout e no pedido: nenhum valor é cobrado. Na página do pedido, o comprador aprova ou recusa o pagamento. No admin da loja, a equipe acompanha o pedido em **Pedidos** e avança a separação e o envio. Um pedido não pago é cancelado automaticamente após `ORDER_PAYMENT_TTL`, e o estoque reservado volta a ficar disponível.
+O ambiente local usa o **Pagamento de teste**, identificado como tal no checkout e no pedido: nenhum valor é cobrado. Na página do pedido, o comprador aprova ou recusa o pagamento, e a resposta chega à API como um webhook assinado, pelo mesmo caminho de um gateway real. Os e-mails do pedido aparecem no Mailpit alguns segundos depois, enviados pelo worker. No admin da loja, a equipe acompanha o pedido em **Pedidos** e avança a separação e o envio. Um pedido não pago é cancelado automaticamente após `ORDER_PAYMENT_TTL`, e o estoque reservado volta a ficar disponível.
 
 | Serviço | Endereço |
 | --- | --- |
@@ -38,6 +38,17 @@ docker compose exec postgres psql -U postgres -d ecommerce
 ```
 
 Para parar, use `docker compose down`. Para apagar também os dados locais, use `docker compose down -v`.
+
+## Worker e mensageria
+
+O serviço `worker` publica os eventos do outbox no RabbitMQ, consome os eventos, envia os e-mails e cancela pedidos vencidos. Sem ele, a loja funciona, mas e-mails e estornos ficam pendentes até ele voltar.
+
+```bash
+docker compose logs -f worker
+docker compose exec worker /app/worker dlq list --consumer sales-notifications
+```
+
+As filas podem ser vistas no painel do RabbitMQ. Para reprocessar mensagens mortas, veja [Arquitetura orientada a eventos](../architecture/event-driven-architecture.md#6-implementado-na-fase-6).
 
 ## Verificar o ambiente
 
@@ -169,6 +180,12 @@ A API também recusa iniciar se o usuário do banco for superusuário ou tiver `
 | `PAYMENTS_TEST_PROVIDER` | `false` | Habilita o Pagamento de teste. Proibido em produção |
 | `ORDER_PAYMENT_TTL` | `30m` | Prazo para pagar antes do cancelamento automático |
 | `ORDER_EXPIRY_INTERVAL` | `30s` | Intervalo da rotina que cancela pedidos vencidos |
+| `RABBITMQ_HOST`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | obrigatórias no worker | Acesso ao RabbitMQ |
+| `RABBITMQ_PORT`, `RABBITMQ_VHOST`, `RABBITMQ_TLS` | `5672`, vazio, `false` | TLS é obrigatório em `staging` e `production` |
+| `WORKER_HEALTH_ADDR` | `:8081` | Health check do worker |
+| `MESSAGING_RELAY_INTERVAL` | `500ms` | Intervalo de leitura do outbox |
+| `MAIL_DISPATCH_INTERVAL` | `2s` | Intervalo de envio de e-mails |
+| `MESSAGING_RETENTION` | `168h` | Tempo de guarda de eventos publicados e processados |
 | `TELEMETRY_ENABLED` | `true` | Liga a exportação de telemetria |
 | `TELEMETRY_OTLP_ENDPOINT` | `otel-collector:4317` | Destino OTLP |
 | `TELEMETRY_OTLP_INSECURE` | `false` | Permite OTLP sem TLS |

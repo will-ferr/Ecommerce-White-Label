@@ -176,3 +176,23 @@ Cada decisão registra contexto, escolha, consequências e alternativas. Uma dec
 **Consequências.** Uma compra completa funciona de ponta a ponta sem simular um gateway real. A troca pelo gateway da Fase 6 implementa `Provider` e passa o estorno para o fluxo assíncrono. Impostos ficam zerados e identificados como "não calculados" até existir configuração fiscal validada.
 
 **Alternativas.** Um módulo por contexto já na Fase 5: mais fronteiras e transações distribuídas antes de qualquer necessidade de implantação separada. Simular respostas de um gateway real: violaria a regra de não apresentar dados simulados como funcionalidade real.
+
+## ADR-018: Integrações assíncronas com o provedor de pagamento em aberto
+
+**Contexto.** A Fase 6 pede mensageria, webhooks, frete, e-mail durável, busca e um gateway real em sandbox. A escolha do gateway foi deixada em aberto, e uma integração só pode ser declarada funcional depois de testada no sandbox do provedor.
+
+**Decisão.**
+
+- **Worker.** Um processo `cmd/worker`, com o mesmo código da API, executa o relay do outbox, os consumidores, o envio de e-mail, a expiração de pedidos e a limpeza das tabelas de mensageria. O relay roda no próprio worker, e não em um `cmd/relay` separado: o `SKIP LOCKED` já permite várias instâncias, e um processo a menos simplifica a operação.
+- **Outbox e inbox.** Eventos são gravados em `messaging.outbox` na transação do negócio. O relay publica no exchange `domain.events` com publisher confirms e só então marca o evento como publicado. Cada consumidor registra o evento em `messaging.inbox` na mesma transação do efeito. O papel da aplicação só insere no outbox. A leitura entre lojas passa por funções `SECURITY DEFINER` que expõem apenas o necessário.
+- **Retentativas.** Cada consumidor tem uma fila quorum, filas de espera com TTL (10 s, 1 min, 10 min e 1 h) e uma DLQ clássica. Erros marcados como permanentes vão direto para a DLQ. A DLQ é inspecionada e reprocessada pelo comando `worker dlq`, que exige motivo e registra a operação na auditoria da plataforma.
+- **E-mail durável.** Mensagens ficam em `notifications.emails`, cifradas com AES-GCM (chave derivada de `MFA_ENCRYPTION_KEY`, com loja e ID como dado autenticado). O conteúdo é apagado após a entrega. O dispatcher aluga lotes e tenta até 6 vezes. Endereços são removidos das mensagens de erro antes de irem para logs e banco.
+- **Pagamentos.** A interface `Provider` passa a incluir `ParseNotification`. Um pedido só é marcado como pago por uma notificação autenticada, nunca pela resposta da chamada de cobrança. A notificação é recebida em `POST /api/v1/webhooks/payments/{provider}` no domínio da loja e gravada em `payments.webhook_events`, com chave única por provedor e ID do evento. Uma repetição não tem efeito. O valor precisa coincidir com o do pagamento. Uma captura que chega depois do cancelamento gera estorno.
+- **Estorno.** O estorno é assíncrono: o cancelamento marca o pagamento como `refund_pending` e publica `payments.refund.requested.v1`. O consumidor chama o provedor com o ID do pagamento como chave de idempotência.
+- **Provedor de teste.** O provedor de teste assina suas notificações com HMAC (chave derivada de `AUTH_SIGNING_KEY`, com validade de 5 minutos) e as entrega pelo mesmo fluxo de webhook. Sem provedor configurado, o checkout responde `PAYMENT_UNAVAILABLE`, em vez de criar pedidos que nunca poderiam ser pagos.
+- **Frete.** O frete por tabela usa faixas de CEP e peso definidas pela própria loja. A cotação com transportadoras fica para quando houver um provedor escolhido.
+- **Busca.** A busca usa PostgreSQL (ADR-011): `tsvector` em português sem acentos, com pesos para nome, marca e descrição, e `pg_trgm` para erros de digitação. O documento de busca é um índice de expressão, e não uma coluna, para que as listagens não o carreguem.
+
+**Consequências.** Integrar um gateway real significa implementar `Provider` (cobrança, estorno e verificação de assinatura), guardar as credenciais da loja com envelope encryption (ADR-014) e validar o fluxo no sandbox do provedor. O critério "fluxo validado no sandbox real" da Fase 6 continua pendente até essa escolha. Notificações aos compradores são exatamente uma por evento no banco. O envio por SMTP é ao menos uma vez, porque um servidor pode aceitar a mensagem e cair antes de responder.
+
+**Alternativas.** Publicar no broker dentro da transação: perde mensagens quando o commit falha. Fila de e-mail no RabbitMQ: colocaria links de acesso no broker sem cifragem e duplicaria o controle de tentativas. Implementar um gateway sem acesso ao sandbox: seria uma integração declarada sem teste real, o que as regras do projeto proíbem.
