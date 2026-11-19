@@ -32,7 +32,7 @@ describe('themeToCss', () => {
     expect(css).toContain('--wl-radius-card:1.5rem')
     expect(css).toContain('--wl-space-section:5rem')
     expect(css).toContain('--wl-font-display:Charter')
-    expect(css.startsWith(':root{')).toBe(true)
+    expect(css.startsWith('html:root{')).toBe(true)
   })
 
   it.each([

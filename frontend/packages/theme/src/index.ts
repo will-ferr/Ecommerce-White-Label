@@ -58,7 +58,9 @@ export function themeToCss(tokens: ThemeTokens): string {
   const spacing = SECTION_SPACING[tokens.spacing.density]
   if (spacing) declarations.push(`--wl-space-section:${spacing}`)
 
-  return `:root{${declarations.join(';')}}`
+  // The stylesheet with the default tokens loads after this rule, so the theme
+  // needs a more specific selector than its :root to take effect.
+  return `html:root{${declarations.join(';')}}`
 }
 
 /** Returns the address only when it is an absolute HTTPS URL. */

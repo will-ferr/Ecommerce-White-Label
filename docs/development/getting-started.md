@@ -42,6 +42,14 @@ bash scripts/smoke.sh
 
 O script confere a API, as três aplicações, os cabeçalhos de segurança e a chegada de métricas, logs e traces.
 
+Para conferir em um navegador real a identidade visual de cada loja:
+
+```bash
+cd frontend
+npx playwright install chromium
+npm run test:e2e
+```
+
 ## Gerenciar lojas
 
 Lojas são gerenciadas pela ferramenta `tenantctl`:

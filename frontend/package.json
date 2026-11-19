@@ -14,10 +14,12 @@
     "lint": "eslint .",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json && npm run typecheck -w @whitelabel/storefront",
     "test": "vitest run",
-    "build": "npm run build -w @whitelabel/admin && npm run build -w @whitelabel/console && npm run build -w @whitelabel/storefront"
+    "build": "npm run build -w @whitelabel/admin && npm run build -w @whitelabel/console && npm run build -w @whitelabel/storefront",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/vite": "^4.3.5",
     "@vitejs/plugin-vue": "^6.0.11",
     "@vue/test-utils": "^2.6.0",
