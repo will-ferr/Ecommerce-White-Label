@@ -1,0 +1,12 @@
+# Keeps every default rule and accepts only the two public sample keys of .env.example.
+# The API refuses these exact values in staging and production.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public development sample keys"
+regexTarget = "secret"
+regexes = [
+  '''^ZGV2ZWxvcG1lbnQtb25seS1zaWduaW5nLWtleS0wMDE=$''',
+  '''^ZGV2ZWxvcG1lbnQtb25seS1tZmEtZW5jcnlwdC0wMDE=$''',
+]
