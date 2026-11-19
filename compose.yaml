@@ -58,6 +58,7 @@ services:
       SMTP_ADDR: mailpit:1025
       SMTP_FROM: nao-responda@plataforma.localhost
       SMTP_REQUIRE_TLS: "false"
+      PAYMENTS_TEST_PROVIDER: "true"
     depends_on:
       migrate: { condition: service_completed_successfully }
       mailpit: { condition: service_started }

@@ -19,3 +19,6 @@ seed() { # slug, name, plan, SEO description
 
 seed aurora "Aurora Cosméticos" enterprise "Loja de demonstração com identidade delicada e layout centralizado."
 seed terra "Terra Café" starter "Loja de demonstração com identidade rústica e layout compacto."
+
+# Demonstration catalog, created through the API.
+node "$(dirname "$0")/seed-catalog.mjs"

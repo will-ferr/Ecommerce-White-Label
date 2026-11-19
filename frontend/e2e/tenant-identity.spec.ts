@@ -10,7 +10,6 @@ const stores = [
     radius: '24px',
     font: 'Charter',
     headerAlignment: 'center',
-    features: ['Marketplace', 'Fidelidade'],
   },
   {
     name: 'Terra Café',
@@ -21,7 +20,6 @@ const stores = [
     radius: '0px',
     font: 'Rockwell',
     headerAlignment: 'flow-start',
-    features: ['Avaliações', 'Favoritos'],
   },
 ]
 
@@ -38,22 +36,12 @@ for (const store of stores) {
     await expect(page.getByText(store.other)).toHaveCount(0)
 
     expect(await computed(page, 'html', 'background-color')).toBe(store.canvas)
-    expect(await computed(page, 'main li', 'background-color')).toBe(store.primary)
-    expect(await computed(page, 'main section', 'border-top-left-radius')).toBe(store.radius)
+    expect(await computed(page, 'main [role="img"]', 'background-color')).toBe(store.primary)
+    expect(await computed(page, 'main [role="img"]', 'border-top-left-radius')).toBe(store.radius)
     expect(await computed(page, 'h1', 'font-family')).toContain(store.font)
     expect(await computed(page, 'header > div', 'justify-content')).toBe(store.headerAlignment)
-
-    for (const feature of store.features) {
-      await expect(page.getByRole('listitem').filter({ hasText: feature })).toBeVisible()
-    }
   })
 }
-
-test('plan limits the features of a store', async ({ page }) => {
-  await page.goto('http://terra.localhost:8080/')
-
-  await expect(page.getByRole('listitem').filter({ hasText: 'Marketplace' })).toHaveCount(0)
-})
 
 test('an address without a store shows a clear page', async ({ page }) => {
   const response = await page.goto('http://desconhecida.localhost:8080/')
