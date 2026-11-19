@@ -108,6 +108,11 @@ func TestHardenedEnvironmentsRequireSecureTransport(t *testing.T) {
 		"sample signing key":            {"AUTH_SIGNING_KEY", base64.StdEncoding.EncodeToString([]byte("development-only-signing-key-001"))},
 		"sample mfa key":                {"MFA_ENCRYPTION_KEY", base64.StdEncoding.EncodeToString([]byte("development-only-mfa-encrypt-001"))},
 	}
+	env := hardenedEnv()
+	env["PAYMENTS_TEST_PROVIDER"] = "true"
+	if _, err := Load(lookup(env)); err == nil {
+		t.Error("the test payment provider must be refused in production")
+	}
 	for _, environment := range []string{"staging", "production"} {
 		for name, tt := range tests {
 			t.Run(environment+"/"+name, func(t *testing.T) {

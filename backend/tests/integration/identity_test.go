@@ -90,17 +90,26 @@ func testAuthConfig() config.Auth {
 	}
 }
 
-func (s *suite) deps(mailer *mailbox, limiter *ratelimit.Limiter) app.RouterDeps {
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	register, err := app.RegisterModules(app.ModuleDeps{
-		Pool: s.runtime, Logger: logger, Limiter: limiter, Mailer: mailer, Auth: testAuthConfig(),
+func (s *suite) modules(mailer *mailbox, limiter *ratelimit.Limiter) *app.Modules {
+	modules, err := app.BuildModules(app.ModuleDeps{
+		Pool: s.runtime, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Limiter: limiter, Mailer: mailer,
+		Auth: testAuthConfig(), Commerce: config.Commerce{PaymentTTL: 30 * time.Minute, TestPayments: true},
 	})
 	if err != nil {
 		panic(err)
 	}
+	return modules
+}
+
+func (s *suite) deps(mailer *mailbox, limiter *ratelimit.Limiter) app.RouterDeps {
+	return routerDeps(s.modules(mailer, limiter))
+}
+
+func routerDeps(modules *app.Modules) app.RouterDeps {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return app.RouterDeps{
 		Logger: logger, Health: health.NewService(logger, "test", time.Second),
-		RequestTimeout: 10 * time.Second, MaxBodyBytes: 1 << 16, RegisterAPI: register,
+		RequestTimeout: 10 * time.Second, MaxBodyBytes: 1 << 16, RegisterAPI: modules.Register,
 	}
 }
 
@@ -111,6 +120,8 @@ type apiClient struct {
 	base    string
 	token   string
 	cookie  string
+	cart    string
+	headers map[string]string
 }
 
 type apiResponse struct {
@@ -143,6 +154,12 @@ func (c *apiClient) call(method, path string, body any) apiResponse {
 	if c.cookie != "" {
 		req.AddCookie(&http.Cookie{Name: "wl_refresh", Value: c.cookie})
 	}
+	if c.cart != "" {
+		req.AddCookie(&http.Cookie{Name: "wl_cart", Value: c.cart})
+	}
+	for name, value := range c.headers {
+		req.Header.Set(name, value)
+	}
 	rec := httptest.NewRecorder()
 	c.handler.ServeHTTP(rec, req)
 
@@ -153,8 +170,11 @@ func (c *apiClient) call(method, path string, body any) apiResponse {
 		}
 	}
 	for _, cookie := range rec.Result().Cookies() {
-		if cookie.Name == "wl_refresh" {
+		switch cookie.Name {
+		case "wl_refresh":
 			c.cookie = cookie.Value
+		case "wl_cart":
+			c.cart = cookie.Value
 		}
 	}
 	if token := response.str("accessToken"); token != "" {

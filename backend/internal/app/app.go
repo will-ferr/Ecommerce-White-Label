@@ -44,12 +44,15 @@ func Run(ctx context.Context, cfg config.Config, version string, logger *slog.Lo
 	mailQueue := mail.NewQueue(mail.NewSMTPSender(cfg.Auth.SMTP), logger)
 	defer mailQueue.Close()
 
-	registerAPI, err := RegisterModules(ModuleDeps{
-		Pool: pool, Logger: logger, Limiter: limiter, Mailer: mailQueue, Auth: cfg.Auth,
+	modules, err := BuildModules(ModuleDeps{
+		Pool: pool, Logger: logger, Limiter: limiter, Mailer: mailQueue, Auth: cfg.Auth, Commerce: cfg.Commerce,
 	})
 	if err != nil {
 		return fmt.Errorf("register modules: %w", err)
 	}
+	jobs, stopJobs := context.WithCancel(ctx)
+	defer stopJobs()
+	go modules.Sales.Service().RunExpiry(jobs, cfg.Commerce.ExpiryInterval)
 
 	healthService := health.NewService(logger, version, healthCheckTimeout,
 		health.Check{Name: "postgres", Critical: true, Probe: pool.Ping},
@@ -65,7 +68,7 @@ func Run(ctx context.Context, cfg config.Config, version string, logger *slog.Lo
 			MaxBodyBytes:   cfg.HTTP.MaxBodyBytes,
 			HSTS:           cfg.Environment.IsHardened(),
 			TrustedProxies: cfg.Auth.TrustedProxies,
-			RegisterAPI:    registerAPI,
+			RegisterAPI:    modules.Register,
 		}),
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTP.ReadTimeout,

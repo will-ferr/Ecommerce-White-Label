@@ -6,9 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"log/slog"
-	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -93,26 +91,9 @@ func client(r *http.Request) app.Client {
 	return app.Client{IP: reqctx.ClientIP(r.Context()), Device: domain.DeviceLabel(r.UserAgent())}
 }
 
-func hostname(hostport string) string {
-	if host, _, err := net.SplitHostPort(hostport); err == nil {
-		return host
-	}
-	return hostport
-}
+func hostname(hostport string) string { return httpx.Hostname(hostport) }
 
-// requireSameOrigin protects the endpoints authenticated by cookie from
-// cross-site requests.
-func requireSameOrigin(r *http.Request) error {
-	denied := apperr.New(apperr.KindForbidden, "ORIGIN_NOT_ALLOWED", "This request is not allowed from another site.")
-	origin, err := url.Parse(r.Header.Get("Origin"))
-	if err != nil || origin.Host == "" || !strings.EqualFold(origin.Hostname(), hostname(r.Host)) {
-		return denied
-	}
-	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
-		return denied
-	}
-	return nil
-}
+func requireSameOrigin(r *http.Request) error { return httpx.RequireSameOrigin(r) }
 
 func (h *Handler) cookieName() string {
 	if h.cookieSecure {
@@ -185,8 +166,6 @@ func (h *Handler) Authenticate(next http.Handler) http.Handler {
 
 // Register adds the routes of the portal.
 func (h *Handler) Register(router chi.Router) {
-	router.Use(h.Authenticate)
-
 	public := authz.Public
 	if h.portal.SelfRegistration {
 		h.route(router, http.MethodPost, "/register", public, h.register)

@@ -40,6 +40,14 @@ type Config struct {
 	Redis       Redis
 	Telemetry   Telemetry
 	Auth        Auth
+	Commerce    Commerce
+}
+
+// Commerce configures the purchase flow.
+type Commerce struct {
+	PaymentTTL     time.Duration
+	ExpiryInterval time.Duration
+	TestPayments   bool
 }
 
 // HTTP configures the HTTP server.
@@ -132,7 +140,15 @@ func Load(lookup Lookup) (Config, error) {
 			MetricInterval: r.duration("TELEMETRY_METRIC_INTERVAL", 15*time.Second),
 		},
 		Auth: r.auth(),
+		Commerce: Commerce{
+			PaymentTTL:     r.duration("ORDER_PAYMENT_TTL", 30*time.Minute),
+			ExpiryInterval: r.duration("ORDER_EXPIRY_INTERVAL", 30*time.Second),
+			TestPayments:   r.boolean("PAYMENTS_TEST_PROVIDER", false),
+		},
 	}
+	r.check(cfg.Commerce.PaymentTTL >= time.Minute && cfg.Commerce.PaymentTTL <= 7*24*time.Hour,
+		"ORDER_PAYMENT_TTL must be between 1m and 168h")
+	r.check(cfg.Commerce.ExpiryInterval >= time.Second, "ORDER_EXPIRY_INTERVAL must be at least 1s")
 
 	r.check(cfg.HTTP.WriteTimeout > cfg.HTTP.RequestTimeout,
 		"HTTP_WRITE_TIMEOUT must be greater than HTTP_REQUEST_TIMEOUT")
@@ -147,6 +163,7 @@ func Load(lookup Lookup) (Config, error) {
 		r.check(!cfg.Telemetry.OTLPInsecure, "TELEMETRY_OTLP_INSECURE must be false in staging and production")
 		r.checkHardenedAuth(cfg.Auth)
 	}
+	r.check(cfg.Environment != Production || !cfg.Commerce.TestPayments, "PAYMENTS_TEST_PROVIDER must be false in production")
 
 	if err := errors.Join(r.errs...); err != nil {
 		return Config{}, fmt.Errorf("invalid configuration: %w", err)

@@ -25,6 +25,97 @@ type AuditEntry struct {
 	OccurredAt time.Time
 }
 
+type CartCart struct {
+	TenantID  uuid.UUID
+	ID        uuid.UUID
+	TokenHash []byte
+	UserID    *uuid.UUID
+	Status    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type CartItem struct {
+	TenantID  uuid.UUID
+	CartID    uuid.UUID
+	VariantID uuid.UUID
+	Quantity  int32
+	AddedAt   time.Time
+}
+
+type CatalogCategory struct {
+	TenantID    uuid.UUID
+	ID          uuid.UUID
+	ParentID    *uuid.UUID
+	Name        string
+	Slug        string
+	Description string
+	Position    int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type CatalogPriceHistory struct {
+	TenantID        uuid.UUID
+	ID              uuid.UUID
+	VariantID       uuid.UUID
+	PriceAmount     int64
+	CompareAtAmount *int64
+	CostAmount      *int64
+	ChangedBy       string
+	ChangedAt       time.Time
+}
+
+type CatalogProduct struct {
+	TenantID       uuid.UUID
+	ID             uuid.UUID
+	CategoryID     *uuid.UUID
+	Name           string
+	Slug           string
+	Description    string
+	Brand          string
+	Status         string
+	Featured       bool
+	SeoTitle       string
+	SeoDescription string
+	Version        int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type CatalogProductImage struct {
+	TenantID  uuid.UUID
+	ID        uuid.UUID
+	ProductID uuid.UUID
+	Url       string
+	Alt       string
+	Position  int32
+}
+
+type CatalogVariant struct {
+	TenantID        uuid.UUID
+	ID              uuid.UUID
+	ProductID       uuid.UUID
+	Sku             string
+	Gtin            *string
+	Options         json.RawMessage
+	WeightGrams     int32
+	PriceAmount     int64
+	CompareAtAmount *int64
+	CostAmount      *int64
+	Position        int32
+	Status          string
+}
+
+type CheckoutIdempotencyKey struct {
+	TenantID    uuid.UUID
+	Scope       string
+	Key         string
+	RequestHash []byte
+	Response    []byte
+	CreatedAt   time.Time
+}
+
 type CoreFeatureFlag struct {
 	Key         string
 	Description string
@@ -86,6 +177,23 @@ type CoreThemeVersion struct {
 	Status    string
 	Tokens    json.RawMessage
 	CreatedAt time.Time
+}
+
+type CustomersAddress struct {
+	TenantID   uuid.UUID
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	Label      string
+	Recipient  string
+	PostalCode string
+	Street     string
+	Number     string
+	Complement string
+	District   string
+	City       string
+	State      string
+	IsDefault  bool
+	CreatedAt  time.Time
 }
 
 type IdentityAccessEvent struct {
@@ -187,4 +295,143 @@ type IdentityUserToken struct {
 	ExpiresAt time.Time
 	UsedAt    *time.Time
 	CreatedAt time.Time
+}
+
+type InventoryMovement struct {
+	TenantID    uuid.UUID
+	ID          uuid.UUID
+	VariantID   uuid.UUID
+	WarehouseID uuid.UUID
+	Kind        string
+	Quantity    int32
+	OnHandAfter int32
+	Reference   string
+	Actor       string
+	CreatedAt   time.Time
+}
+
+type InventoryReservation struct {
+	TenantID    uuid.UUID
+	ID          uuid.UUID
+	OrderID     uuid.UUID
+	VariantID   uuid.UUID
+	WarehouseID uuid.UUID
+	Quantity    int32
+	Status      string
+	ExpiresAt   time.Time
+	CreatedAt   time.Time
+}
+
+type InventoryStockLevel struct {
+	TenantID    uuid.UUID
+	VariantID   uuid.UUID
+	WarehouseID uuid.UUID
+	OnHand      int32
+	Reserved    int32
+	MinQuantity int32
+}
+
+type InventoryWarehouse struct {
+	TenantID  uuid.UUID
+	ID        uuid.UUID
+	Name      string
+	IsDefault bool
+}
+
+type OrdersCounter struct {
+	TenantID   uuid.UUID
+	NextNumber int64
+}
+
+type OrdersItem struct {
+	TenantID     uuid.UUID
+	ID           uuid.UUID
+	OrderID      uuid.UUID
+	VariantID    uuid.UUID
+	ProductName  string
+	VariantLabel string
+	Sku          string
+	Quantity     int32
+	UnitAmount   int64
+	TotalAmount  int64
+}
+
+type OrdersNote struct {
+	TenantID  uuid.UUID
+	ID        uuid.UUID
+	OrderID   uuid.UUID
+	AuthorID  uuid.UUID
+	Body      string
+	CreatedAt time.Time
+}
+
+type OrdersOrder struct {
+	TenantID        uuid.UUID
+	ID              uuid.UUID
+	Number          int64
+	Status          string
+	CustomerUserID  *uuid.UUID
+	CustomerName    string
+	CustomerEmail   string
+	ShippingAddress json.RawMessage
+	ShippingMethod  string
+	ShippingAmount  int64
+	SubtotalAmount  int64
+	DiscountAmount  int64
+	TaxAmount       int64
+	TotalAmount     int64
+	Currency        string
+	TrackingCode    string
+	CancelReason    string
+	PaymentDueAt    time.Time
+	Version         int32
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type OrdersStatusHistory struct {
+	TenantID   uuid.UUID
+	ID         uuid.UUID
+	OrderID    uuid.UUID
+	FromStatus string
+	ToStatus   string
+	ActorType  string
+	ActorID    string
+	Note       string
+	CreatedAt  time.Time
+}
+
+type PaymentsPayment struct {
+	TenantID          uuid.UUID
+	ID                uuid.UUID
+	OrderID           uuid.UUID
+	Provider          string
+	Method            string
+	Status            string
+	Amount            int64
+	Currency          string
+	ProviderReference string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type PaymentsTransaction struct {
+	TenantID          uuid.UUID
+	ID                uuid.UUID
+	PaymentID         uuid.UUID
+	Kind              string
+	Amount            int64
+	ProviderReference string
+	CreatedAt         time.Time
+}
+
+type ShippingMethod struct {
+	TenantID    uuid.UUID
+	ID          uuid.UUID
+	Name        string
+	Kind        string
+	PriceAmount int64
+	MinDays     int32
+	MaxDays     int32
+	Active      bool
 }

@@ -4,6 +4,7 @@ package identity
 import (
 	"fmt"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -60,6 +61,19 @@ func New(deps Deps) (*Module, error) {
 		return identityhttp.NewHandler(service, portal, deps.Limiter, deps.Logger, deps.Auth.CookieSecure)
 	}
 	return &Module{customer: handler(app.Customer), staff: handler(app.Staff), platform: handler(app.Platform)}, nil
+}
+
+// CustomerAuthentication reads the bearer token of customers on every store route.
+func (m *Module) CustomerAuthentication() func(http.Handler) http.Handler {
+	return m.customer.Authenticate
+}
+
+// StaffAuthentication reads the bearer token of store teams.
+func (m *Module) StaffAuthentication() func(http.Handler) http.Handler { return m.staff.Authenticate }
+
+// PlatformAuthentication reads the bearer token of platform operators.
+func (m *Module) PlatformAuthentication() func(http.Handler) http.Handler {
+	return m.platform.Authenticate
 }
 
 // RegisterCustomerRoutes adds the customer portal. The store must already be

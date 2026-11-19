@@ -22,6 +22,16 @@ overrides:
         go_type:
           type: string
           pointer: true
+      - db_type: pg_catalog.int8
+        nullable: true
+        go_type:
+          type: int64
+          pointer: true
+      - db_type: pg_catalog.bool
+        nullable: true
+        go_type:
+          type: bool
+          pointer: true
       - db_type: jsonb
         go_type: encoding/json.RawMessage
 sql:
@@ -48,4 +58,28 @@ sql:
       go:
         package: sqlcgen
         out: internal/modules/audit/internal/sqlcgen
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/catalog/internal/sqlcgen/queries
+    gen:
+      go:
+        package: sqlcgen
+        out: internal/modules/catalog/internal/sqlcgen
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/inventory/internal/sqlcgen/queries
+    gen:
+      go:
+        package: sqlcgen
+        out: internal/modules/inventory/internal/sqlcgen
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema: migrations
+    queries: internal/modules/sales/internal/sqlcgen/queries
+    gen:
+      go:
+        package: sqlcgen
+        out: internal/modules/sales/internal/sqlcgen
         sql_package: pgx/v5

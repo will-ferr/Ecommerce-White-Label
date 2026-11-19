@@ -2,12 +2,12 @@
 package domain
 
 import (
-	"net/mail"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/apperr"
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/email"
 )
 
 // Realms separate the three kinds of account.
@@ -35,7 +35,6 @@ const (
 	minPasswordLength = 10
 	maxPasswordLength = 128
 	maxNameLength     = 120
-	maxEmailLength    = 254
 )
 
 // commonPasswords refuses frequent choices that satisfy the length rule.
@@ -54,12 +53,7 @@ func fieldError(field, code, message string) *apperr.Error {
 
 // NormalizeEmail validates an address and returns its canonical form.
 func NormalizeEmail(raw string) (string, error) {
-	email := strings.ToLower(strings.TrimSpace(raw))
-	address, err := mail.ParseAddress(email)
-	if err != nil || address.Address != email || len(email) > maxEmailLength || !strings.Contains(email[strings.LastIndex(email, "@"):], ".") {
-		return "", fieldError("email", "invalid", "Enter a valid e-mail address.")
-	}
-	return email, nil
+	return email.Normalize(raw)
 }
 
 // NormalizeName validates a display name.
