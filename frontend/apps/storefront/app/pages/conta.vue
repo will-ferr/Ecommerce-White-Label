@@ -17,6 +17,13 @@ onMounted(async () => {
   ready.value = true
 })
 
+// The server already ended every session; only local state remains.
+async function afterErasure() {
+  await auth.logout().catch(() => undefined)
+  await cart.load().catch(() => undefined)
+  await navigateTo('/')
+}
+
 async function signOut() {
   try {
     await auth.logout()
@@ -40,6 +47,7 @@ async function signOut() {
         </div>
         <AccountOrders />
         <AccountSecurity :auth="auth" />
+        <AccountPrivacy @erased="afterErasure" />
       </template>
       <UiSkeleton v-else class="h-40 w-full" />
     </div>

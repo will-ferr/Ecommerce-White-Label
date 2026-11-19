@@ -94,6 +94,19 @@ export interface CheckoutSummary {
   paymentLabel: string
   /** The store uses the test provider: nothing is charged. */
   testPayment: boolean
+  discount: number
+  coupon: { code: string; description: string } | null
+  /** Code of the reason the coupon was not applied. */
+  couponError?: string
+}
+
+/** A content page of the store, written in the light text format of RichText. */
+export interface StorePage {
+  slug: string
+  title: string
+  body: string
+  seoDescription: string
+  updatedAt: string
 }
 
 export interface Address {
@@ -113,6 +126,7 @@ export interface CheckoutInput {
   address: Address
   shippingMethodId: string
   expectedTotal: number
+  couponCode?: string
 }
 
 export interface PlacedOrder {
@@ -145,6 +159,7 @@ export interface Order {
   subtotal: number
   shippingAmount: number
   discount: number
+  couponCode: string
   tax: number
   total: number
   currency: string
@@ -248,8 +263,10 @@ export function createStoreClient(send: Sender) {
     setItem: (variantId: string, quantity: number) => send<Cart>('PUT', `/cart/items/${segment(variantId)}`, { quantity }),
     removeItem: (variantId: string) => send<Cart>('DELETE', `/cart/items/${segment(variantId)}`),
     mergeCart: () => send<Cart>('POST', '/cart/merge', {}),
-    summary: (shippingMethodId?: string, postalCode?: string) =>
-      send<CheckoutSummary>('POST', '/checkout/summary', { shippingMethodId: shippingMethodId ?? null, postalCode: postalCode ?? '' }),
+    summary: (request: { shippingMethodId?: string; postalCode?: string; couponCode?: string } = {}) =>
+      send<CheckoutSummary>('POST', '/checkout/summary', {
+        shippingMethodId: request.shippingMethodId || null, postalCode: request.postalCode ?? '', couponCode: request.couponCode ?? '',
+      }),
     placeOrder: (input: CheckoutInput, idempotencyKey: string) =>
       send<PlacedOrder>('POST', '/checkout/orders', input, { 'Idempotency-Key': idempotencyKey }),
     order: (number: number, token?: string) => send<Order>('GET', `/orders/${segment(number)}${query({ token })}`),
@@ -259,6 +276,10 @@ export function createStoreClient(send: Sender) {
     addresses: () => items<SavedAddress>('/account/addresses'),
     addAddress: (input: Address & { label: string; isDefault: boolean }) => send<{ id: string }>('POST', '/account/addresses', input),
     deleteAddress: (id: string) => send<void>('DELETE', `/account/addresses/${segment(id)}`),
+    footerPages: async () => (await send<{ items: { slug: string; title: string }[] }>('GET', '/content/pages')).items,
+    page: (slug: string) => send<StorePage>('GET', `/content/pages/${segment(slug)}`),
+    exportData: () => send<Record<string, unknown>>('GET', '/account/privacy/export'),
+    eraseAccount: (password: string) => send<void>('POST', '/account/privacy/erase', { password }),
   }
 }
 
@@ -278,7 +299,7 @@ export function createCommerceAdminClient(send: Sender) {
     updateProduct: (id: string, input: ProductInput) => send<void>('PUT', `/catalog/products/${segment(id)}`, input),
     adjustStock: (input: { variantId: string; delta: number; reason: string; minQuantity?: number }) =>
       send<Stock>('POST', '/inventory/adjustments', input),
-    orders: (params: { status?: string; q?: string; cursor?: string } = {}) => send<Page<Order>>('GET', `/orders${query(params)}`),
+    orders: (params: { status?: string; q?: string; cursor?: string; customer?: string } = {}) => send<Page<Order>>('GET', `/orders${query(params)}`),
     order: (id: string) => send<Order>('GET', `/orders/${segment(id)}`),
     changeStatus: (id: string, input: { status: string; trackingCode?: string; note?: string }) =>
       send<void>('POST', `/orders/${segment(id)}/status`, input),

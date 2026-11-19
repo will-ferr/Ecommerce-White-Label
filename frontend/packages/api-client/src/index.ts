@@ -96,6 +96,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
 export type ApiClient = ReturnType<typeof createApiClient>
 
+export * from './administration'
 export * from './commerce'
 export * from './portal'
 

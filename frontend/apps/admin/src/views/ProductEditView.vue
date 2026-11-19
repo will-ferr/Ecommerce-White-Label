@@ -3,7 +3,7 @@ import { ApiError, type AdminProduct, type AdminVariant, type Category, type Ima
 import { errorMessage } from '@whitelabel/auth'
 import { useAuth } from '@whitelabel/panel-shell'
 import { centsToInput, parseMoney, UiAlert, UiButton, UiInput, UiSkeleton } from '@whitelabel/ui'
-import { computed, onMounted, reactive, ref, useId } from 'vue'
+import { computed, onMounted, reactive, ref, useId, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { PRODUCT_STATUS_LABELS, useCommerce } from '../commerce'
@@ -74,6 +74,17 @@ onMounted(async () => {
     failure.value = errorMessage(error)
   } finally {
     loaded.value = true
+  }
+})
+
+// After a new product is created the route changes to its address and this
+// view is reused, so the saved product and its stock must be loaded here.
+watch(() => props.id, async (id) => {
+  if (!id) return
+  try {
+    fill(await api.product(id))
+  } catch (error) {
+    failure.value = errorMessage(error)
   }
 })
 

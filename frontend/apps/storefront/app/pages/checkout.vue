@@ -19,7 +19,29 @@ const address = reactive<Address>({ recipient: '', postalCode: '', street: '', n
 const failure = ref<string>()
 const fieldErrors = ref<Record<string, string>>({})
 const busy = ref(false)
+const couponInput = ref('')
+const appliedCoupon = ref('')
+const couponId = useId()
 let idempotencyKey = ''
+
+const COUPON_ERRORS: Record<string, string> = {
+  COUPON_NOT_FOUND: 'Cupom não encontrado.',
+  COUPON_NOT_STARTED: 'Este cupom ainda não está valendo.',
+  COUPON_EXPIRED: 'Este cupom expirou.',
+  COUPON_MIN_SUBTOTAL: 'O pedido não atinge o valor mínimo deste cupom.',
+  COUPON_EXHAUSTED: 'Este cupom esgotou.',
+  COUPON_ALREADY_USED: 'Você já usou este cupom.',
+}
+const couponMessage = computed(() => (summary.value?.couponError ? (COUPON_ERRORS[summary.value.couponError] ?? 'Não foi possível usar este cupom.') : ''))
+
+async function applyCoupon(code: string) {
+  appliedCoupon.value = code.trim()
+  try {
+    await refresh()
+  } catch (error) {
+    failure.value = errorMessage(error)
+  }
+}
 
 function useAddress(saved: SavedAddress) {
   Object.assign(address, {
@@ -35,11 +57,11 @@ const postalDigits = computed(() => {
 })
 
 async function refresh() {
-  summary.value = await api.summary(shippingId.value || undefined, postalDigits.value)
+  summary.value = await api.summary({ shippingMethodId: shippingId.value, postalCode: postalDigits.value, couponCode: appliedCoupon.value })
   const offered = summary.value.shippingOptions.some((option) => option.id === shippingId.value)
   if (!offered && summary.value.shippingOptions[0]) {
     shippingId.value = summary.value.shippingOptions[0].id
-    summary.value = await api.summary(shippingId.value, postalDigits.value)
+    summary.value = await api.summary({ shippingMethodId: shippingId.value, postalCode: postalDigits.value, couponCode: appliedCoupon.value })
   }
 }
 
@@ -94,7 +116,10 @@ async function submit() {
   idempotencyKey ||= crypto.randomUUID()
   try {
     const placed = await api.placeOrder(
-      { customerName: name.value, customerEmail: email.value, address: { ...address }, shippingMethodId: shippingId.value, expectedTotal: summary.value.total },
+      {
+        customerName: name.value, customerEmail: email.value, address: { ...address }, shippingMethodId: shippingId.value,
+        expectedTotal: summary.value.total, couponCode: summary.value.coupon?.code ?? '',
+      },
       idempotencyKey,
     )
     await cart.load().catch(() => undefined)
@@ -107,6 +132,9 @@ async function submit() {
       failure.value = error.code === 'PRICE_CHANGED'
         ? 'Os valores mudaram desde que você abriu esta página. Confira o novo total e confirme novamente.'
         : 'Alguns itens esgotaram. Ajuste o carrinho para continuar.'
+    } else if (error instanceof ApiError && error.code in COUPON_ERRORS) {
+      failure.value = COUPON_ERRORS[error.code]
+      await applyCoupon('')
     } else if (error instanceof ApiError && error.fieldErrors.length) {
       fieldErrors.value = Object.fromEntries(error.fieldErrors.map((field) => [field.field, FIELD_LABELS[field.field] ?? 'Confira este campo.']))
       failure.value = 'Confira os campos destacados.'
@@ -208,8 +236,28 @@ async function submit() {
           <dl class="space-y-2 border-t border-line pt-4 text-ink">
             <div class="flex justify-between"><dt>Subtotal</dt><dd>{{ money(summary.subtotal) }}</dd></div>
             <div class="flex justify-between"><dt>Frete</dt><dd>{{ summary.shipping ? money(summary.shippingAmount) : '—' }}</dd></div>
+            <div v-if="summary.discount" class="flex justify-between text-success" data-testid="checkout-discount">
+              <dt>Desconto ({{ summary.coupon?.code }})</dt><dd>−{{ money(summary.discount) }}</dd>
+            </div>
             <div class="flex justify-between text-lg font-semibold"><dt>Total</dt><dd data-testid="checkout-total">{{ money(summary.total) }}</dd></div>
           </dl>
+          <div class="space-y-1.5 border-t border-line pt-4">
+            <label :for="couponId" class="block text-sm font-semibold text-ink">Cupom de desconto</label>
+            <div v-if="summary.coupon" class="flex items-center justify-between gap-3 text-sm">
+              <span class="text-ink"><strong>{{ summary.coupon.code }}</strong><span v-if="summary.coupon.description" class="text-muted"> · {{ summary.coupon.description }}</span></span>
+              <button type="button" class="min-h-11 font-semibold text-primary underline underline-offset-4" @click="applyCoupon('')">Remover cupom</button>
+            </div>
+            <div v-else class="flex gap-2">
+              <input
+                :id="couponId" v-model="couponInput" maxlength="30" autocomplete="off" :aria-invalid="couponMessage ? 'true' : undefined"
+                :aria-describedby="couponMessage ? `${couponId}-erro` : undefined"
+                class="block min-h-11 w-full min-w-0 rounded-control border border-muted bg-surface px-3 uppercase text-ink"
+                @keydown.enter.prevent="applyCoupon(couponInput)"
+              />
+              <button type="button" class="min-h-11 shrink-0 rounded-control border border-primary px-4 font-semibold text-primary" @click="applyCoupon(couponInput)">Aplicar</button>
+            </div>
+            <p v-if="couponMessage" :id="`${couponId}-erro`" class="text-sm text-danger" role="status">{{ couponMessage }}</p>
+          </div>
           <p class="text-xs text-muted">Impostos não calculados: a configuração fiscal da loja ainda não foi validada.</p>
           <UiButton type="submit" class="w-full" :disabled="busy || !summary.shipping || !summary.paymentLabel || summary.cart.hasUnavailable">
             {{ busy ? 'Enviando…' : 'Confirmar pedido' }}

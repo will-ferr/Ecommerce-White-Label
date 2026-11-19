@@ -13,8 +13,6 @@ const tenant = useTenantStore()
     <main id="conteudo" class="mx-auto w-full flex-1 px-4 py-[var(--wl-space-section)] sm:px-6" :class="wide ? 'max-w-6xl' : 'max-w-3xl'">
       <slot />
     </main>
-    <footer class="border-t border-line bg-surface">
-      <p class="mx-auto max-w-6xl px-4 py-6 text-sm text-muted sm:px-6">{{ tenant.config.store.name }}</p>
-    </footer>
+    <StoreFooter :name="tenant.config.store.name" />
   </div>
 </template>
