@@ -4,7 +4,9 @@ import { createPinia } from 'pinia'
 import { createApp, h } from 'vue'
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
-import { authKey, panelKey, type PanelPortal } from './context'
+import { authKey, panelKey, type NavItem, type PanelPortal } from './context'
+
+export { useAuth, usePanel, type NavItem } from './context'
 import PanelLayout from './PanelLayout.vue'
 import { useErrorStore } from './stores/errors'
 
@@ -14,6 +16,7 @@ export interface PanelOptions {
   description: string
   portal: PanelPortal
   routes?: RouteRecordRaw[]
+  navigation?: NavItem[]
 }
 
 const PORTAL_BASE = { staff: '/api/v1/staff', platform: '/api/v1/platform' } as const
@@ -24,14 +27,14 @@ export function safeRedirect(target: unknown): string {
 }
 
 /** Creates a panel with routing, session and central error handling configured. */
-export function createPanelApp({ title, heading, description, portal, routes = [] }: PanelOptions) {
+export function createPanelApp({ title, heading, description, portal, routes = [], navigation = [] }: PanelOptions) {
   const app = createApp({ render: () => h(PanelLayout, { title }) })
   const pinia = createPinia()
   app.use(pinia)
 
   const auth = createAuthStore(createPortalClient(PORTAL_BASE[portal]))(pinia)
   app.provide(authKey, auth)
-  app.provide(panelKey, { portal, title })
+  app.provide(panelKey, { portal, title, navigation })
 
   const router = createRouter({
     history: createWebHistory(),

@@ -16,6 +16,9 @@ export default defineNuxtConfig({
   },
   routeRules: {
     '/conta': { ssr: false },
+    '/carrinho': { ssr: false },
+    '/checkout': { ssr: false },
+    '/pedido/**': { ssr: false },
   },
   runtimeConfig: {
     // Overridden by NUXT_API_INTERNAL_URL. Used only for server-side rendering.

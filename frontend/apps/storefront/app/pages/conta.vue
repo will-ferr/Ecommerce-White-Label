@@ -2,8 +2,8 @@
 import { AccountSecurity } from '@whitelabel/auth'
 import { UiButton, UiSkeleton } from '@whitelabel/ui'
 
-const tenant = useTenantStore()
 const auth = useStoreAuth()
+const cart = useCartStore()
 const ready = ref(false)
 
 useSeoMeta({ title: 'Minha conta', robots: 'noindex,nofollow' })
@@ -21,15 +21,15 @@ async function signOut() {
   try {
     await auth.logout()
   } finally {
+    await cart.load().catch(() => undefined)
     await navigateTo('/')
   }
 }
 </script>
 
 <template>
-  <div v-if="tenant.config" class="flex min-h-dvh flex-col">
-    <StoreHeader :name="tenant.config.store.name" :logo-url="tenant.config.theme.tokens.assets.logoUrl" :layout="tenant.config.theme.tokens.layout.header" />
-    <main class="mx-auto w-full max-w-3xl flex-1 space-y-6 px-4 py-[var(--wl-space-section)] sm:px-6">
+  <StoreLayout :wide="false">
+    <div class="space-y-6">
       <template v-if="ready && auth.user">
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div class="min-w-0">
@@ -38,9 +38,10 @@ async function signOut() {
           </div>
           <UiButton @click="signOut">Sair</UiButton>
         </div>
+        <AccountOrders />
         <AccountSecurity :auth="auth" />
       </template>
       <UiSkeleton v-else class="h-40 w-full" />
-    </main>
-  </div>
+    </div>
+  </StoreLayout>
 </template>

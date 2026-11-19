@@ -3,9 +3,16 @@ import { inject, type InjectionKey } from 'vue'
 
 export type PanelPortal = 'staff' | 'platform'
 
+export interface NavItem {
+  to: string
+  label: string
+  permission?: string
+}
+
 export interface PanelContext {
   portal: PanelPortal
   title: string
+  navigation: NavItem[]
 }
 
 export const authKey: InjectionKey<AuthStore> = Symbol('auth')

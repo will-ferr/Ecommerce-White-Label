@@ -16,14 +16,17 @@ export class ApiError extends Error {
   readonly code: string
   readonly correlationId?: string
   readonly fieldErrors: FieldError[]
+  /** Complete error body, for endpoints that send extra data with the failure. */
+  readonly details?: unknown
 
-  constructor(status: number, code: string, message: string, correlationId?: string, fieldErrors: FieldError[] = []) {
+  constructor(status: number, code: string, message: string, correlationId?: string, fieldErrors: FieldError[] = [], details?: unknown) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
     this.correlationId = correlationId
     this.fieldErrors = fieldErrors
+    this.details = details
   }
 }
 
@@ -93,4 +96,38 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
 export type ApiClient = ReturnType<typeof createApiClient>
 
+export * from './commerce'
 export * from './portal'
+
+/** Decodes an answer of the API, turning failures into ApiError. */
+export async function readResponse<T>(response: Response): Promise<T> {
+  if (response.status === 202 || response.status === 204) return undefined as T
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch {
+    throw new ApiError(response.status, UNEXPECTED_RESPONSE, 'O servidor retornou uma resposta inesperada.')
+  }
+  if (response.ok) return payload as T
+  if (isProblem(payload)) {
+    throw new ApiError(response.status, payload.code, payload.detail ?? payload.title, payload.correlation_id, payload.errors ?? [], payload)
+  }
+  throw new ApiError(response.status, UNEXPECTED_RESPONSE, 'O servidor retornou uma resposta inesperada.')
+}
+
+/** Creates a sender for anonymous requests, used by server-side rendering. */
+export function createPublicSender(baseUrl: string, fetcher: typeof globalThis.fetch = (...args) => globalThis.fetch(...args)) {
+  return async <T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> => {
+    let response: Response
+    try {
+      response = await fetcher(`${baseUrl}${path}`, {
+        method,
+        headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...headers },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+    } catch {
+      throw new ApiError(0, NETWORK_ERROR, 'Não foi possível conectar ao servidor.')
+    }
+    return readResponse<T>(response)
+  }
+}

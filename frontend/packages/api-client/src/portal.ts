@@ -1,4 +1,4 @@
-import { ApiError, NETWORK_ERROR, UNEXPECTED_RESPONSE, type Problem } from './index'
+import { ApiError, NETWORK_ERROR, readResponse } from './index'
 import type { components } from './schema'
 
 export type AuthResult = components['schemas']['AuthResult']
@@ -20,13 +20,10 @@ interface SendOptions {
   body?: unknown
   /** Sends the access token and renews it once when it has expired. */
   auth?: boolean
+  headers?: Record<string, string>
 }
 
 const REFRESH_RETRY_DELAY_MS = 300
-
-function isProblem(body: unknown): body is Problem {
-  return typeof body === 'object' && body !== null && 'code' in body && 'status' in body
-}
 
 /**
  * Client of one portal. The access token stays only in memory, and the refresh
@@ -36,12 +33,13 @@ export function createPortalClient(basePath: PortalBase, fetcher: typeof globalT
   let accessToken: string | undefined
   let renewing: Promise<boolean> | undefined
 
-  async function request(method: string, path: string, body: unknown, token: string | undefined): Promise<Response> {
-    const headers: Record<string, string> = { Accept: 'application/json' }
+  async function request(method: string, path: string, body: unknown, token: string | undefined, extra: Record<string, string> = {}): Promise<Response> {
+    const url = path.startsWith('/api/') ? path : `${basePath}${path}`
+    const headers: Record<string, string> = { Accept: 'application/json', ...extra }
     if (body !== undefined) headers['Content-Type'] = 'application/json'
     if (token) headers.Authorization = `Bearer ${token}`
     try {
-      return await fetcher(`${basePath}${path}`, {
+      return await fetcher(url, {
         method,
         headers,
         credentials: 'same-origin',
@@ -52,20 +50,7 @@ export function createPortalClient(basePath: PortalBase, fetcher: typeof globalT
     }
   }
 
-  async function read<T>(response: Response): Promise<T> {
-    if (response.status === 202 || response.status === 204) return undefined as T
-    let payload: unknown
-    try {
-      payload = await response.json()
-    } catch {
-      throw new ApiError(response.status, UNEXPECTED_RESPONSE, 'O servidor retornou uma resposta inesperada.')
-    }
-    if (response.ok) return payload as T
-    if (isProblem(payload)) {
-      throw new ApiError(response.status, payload.code, payload.detail ?? payload.title, payload.correlation_id, payload.errors ?? [])
-    }
-    throw new ApiError(response.status, UNEXPECTED_RESPONSE, 'O servidor retornou uma resposta inesperada.')
-  }
+  const read = readResponse
 
   function remember(result: AuthResult): AuthResult {
     if (result.accessToken) accessToken = result.accessToken
@@ -95,10 +80,12 @@ export function createPortalClient(basePath: PortalBase, fetcher: typeof globalT
     return renewing
   }
 
-  async function send<T>(method: string, path: string, { body, auth = false }: SendOptions = {}): Promise<T> {
-    const response = await request(method, path, body, auth ? accessToken : undefined)
-    if (auth && response.status === 401 && (await renew())) {
-      return read<T>(await request(method, path, body, accessToken))
+  async function send<T>(method: string, path: string, { body, auth = false, headers }: SendOptions = {}): Promise<T> {
+    const token = auth ? accessToken : undefined
+    const response = await request(method, path, body, token, headers)
+    // Only a request that carried a token can be fixed by renewing the session.
+    if (token && response.status === 401 && (await renew())) {
+      return read<T>(await request(method, path, body, accessToken, headers))
     }
     return read<T>(response)
   }
@@ -108,6 +95,9 @@ export function createPortalClient(basePath: PortalBase, fetcher: typeof globalT
   const list = async <T>(path: string) => (await authed<Items<T>>('GET', path)).items
 
   return {
+    /** Sends any request with the session of this portal, when there is one. */
+    call: <T>(method: string, path: string, body?: unknown, headers?: Record<string, string>) =>
+      send<T>(method, path, { body, auth: true, headers }),
     login: async (input: { email: string; password: string; store?: string }) => remember(await post<AuthResult>('/login', input)),
     completeChallenge: async (challenge: string, code: string) =>
       remember(await post<AuthResult>('/mfa/challenge', { challenge, code })),
@@ -143,6 +133,16 @@ export function createPortalClient(basePath: PortalBase, fetcher: typeof globalT
     changeRole: (id: string, role: string) => authed('PUT', `/team/${encodeURIComponent(id)}/role`, { role }),
     deactivateMember: (id: string) => authed('POST', `/team/${encodeURIComponent(id)}/deactivate`, {}),
     listAudit: () => list<AuditEntry>('/audit'),
+    /** Downloads a file, such as a CSV export, with the session of this portal. */
+    download: async (path: string): Promise<Blob> => {
+      const token = accessToken
+      let response = await request('GET', path, undefined, token)
+      if (token && response.status === 401 && (await renew())) {
+        response = await request('GET', path, undefined, accessToken)
+      }
+      if (!response.ok) await read(response)
+      return response.blob()
+    },
   }
 }
 

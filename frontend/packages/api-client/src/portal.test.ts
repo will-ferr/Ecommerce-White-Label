@@ -30,7 +30,7 @@ describe('createPortalClient', () => {
   })
 
   it('does not store a token while the second step is pending', async () => {
-    const fetcher = vi.fn().mockResolvedValueOnce(json({ status: 'mfa_required', challenge: 'c' })).mockResolvedValueOnce(problem('AUTHENTICATION_REQUIRED', 401)).mockResolvedValueOnce(problem('SESSION_EXPIRED', 401))
+    const fetcher = vi.fn().mockResolvedValueOnce(json({ status: 'mfa_required', challenge: 'c' })).mockResolvedValueOnce(problem('AUTHENTICATION_REQUIRED', 401))
     const client = createPortalClient('/api/v1/auth', fetcher)
 
     await client.login({ email: 'a@b.com', password: 'x' })
@@ -94,6 +94,25 @@ describe('createPortalClient', () => {
     await client.login({ email: 'a@b.com', password: 'x' })
 
     await expect(client.me()).rejects.toMatchObject({ code: 'SESSION_EXPIRED' })
+  })
+
+  it('does not try to renew a session that never existed', async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(problem('AUTHENTICATION_REQUIRED', 401))
+    const client = createPortalClient('/api/v1/auth', fetcher)
+
+    await expect(client.call('GET', '/api/v1/account/orders')).rejects.toMatchObject({ code: 'AUTHENTICATION_REQUIRED' })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(fetcher.mock.calls[0]?.[0]).toBe('/api/v1/account/orders')
+  })
+
+  it('sends extra headers and keeps the error body', async () => {
+    const fetcher = vi.fn().mockResolvedValue(json({ title: 'Conflict', status: 409, code: 'PRICE_CHANGED', summary: { total: 10 } }, 409))
+    const client = createPortalClient('/api/v1/auth', fetcher)
+
+    const error = await client.call('POST', '/api/v1/checkout/orders', {}, { 'Idempotency-Key': 'abc' }).catch((e: unknown) => e)
+
+    expect(authorization(fetcher, 0)['Idempotency-Key']).toBe('abc')
+    expect(error).toMatchObject({ code: 'PRICE_CHANGED', details: { summary: { total: 10 } } })
   })
 
   it('exposes field errors', async () => {
