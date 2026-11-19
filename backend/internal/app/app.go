@@ -13,7 +13,6 @@ import (
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/config"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/database"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/health"
-	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/mail"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/ratelimit"
 )
 
@@ -41,18 +40,13 @@ func Run(ctx context.Context, cfg config.Config, version string, logger *slog.Lo
 	if cfg.Auth.RateLimitEnabled {
 		limiter = ratelimit.New(redisClient, logger)
 	}
-	mailQueue := mail.NewQueue(mail.NewSMTPSender(cfg.Auth.SMTP), logger)
-	defer mailQueue.Close()
-
+	// E-mail, events and scheduled jobs run in the worker process.
 	modules, err := BuildModules(ModuleDeps{
-		Pool: pool, Logger: logger, Limiter: limiter, Mailer: mailQueue, Auth: cfg.Auth, Commerce: cfg.Commerce,
+		Pool: pool, Logger: logger, Limiter: limiter, Auth: cfg.Auth, Commerce: cfg.Commerce,
 	})
 	if err != nil {
 		return fmt.Errorf("register modules: %w", err)
 	}
-	jobs, stopJobs := context.WithCancel(ctx)
-	defer stopJobs()
-	go modules.Sales.Service().RunExpiry(jobs, cfg.Commerce.ExpiryInterval)
 
 	healthService := health.NewService(logger, version, healthCheckTimeout,
 		health.Check{Name: "postgres", Critical: true, Probe: pool.Ping},

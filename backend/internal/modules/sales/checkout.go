@@ -47,6 +47,8 @@ type Summary struct {
 	Total           int64            `json:"total"`
 	Currency        string           `json:"currency"`
 	PaymentLabel    string           `json:"paymentLabel"`
+	// TestPayment tells the buyer that nothing is charged.
+	TestPayment bool `json:"testPayment"`
 }
 
 // CheckoutInput is what the buyer sends to place an order. It carries no
@@ -58,6 +60,10 @@ type CheckoutInput struct {
 	Address          br.Address `json:"address"`
 	ShippingMethodID uuid.UUID  `json:"shippingMethodId"`
 	ExpectedTotal    int64      `json:"expectedTotal"`
+
+	// StoreHost is the address where the order was placed, used in later
+	// messages. It comes from the request, never from the body.
+	StoreHost string `json:"-"`
 }
 
 // PlacedOrder is the answer to a successful checkout.
@@ -107,21 +113,28 @@ func toOption(method sqlcgen.ShippingMethod) ShippingOption {
 	return ShippingOption{ID: method.ID, Name: method.Name, Kind: method.Kind, Price: method.PriceAmount, MinDays: method.MinDays, MaxDays: method.MaxDays}
 }
 
-func (s *Service) summarize(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID, cart *sqlcgen.CartCart, methodID *uuid.UUID) (Summary, error) {
+func (s *Service) summarize(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID, cart *sqlcgen.CartCart, methodID *uuid.UUID, postalCode string) (Summary, error) {
 	view, err := s.buildView(ctx, tx, q, tenantID, cart)
 	if err != nil {
 		return Summary{}, err
 	}
-	active := true
-	methods, err := q.ListShippingMethods(ctx, sqlcgen.ListShippingMethodsParams{TenantID: tenantID, Active: &active})
-	if err != nil {
-		return Summary{}, fmt.Errorf("list shipping methods: %w", err)
+	summary := Summary{Cart: view, Currency: view.Currency}
+	if s.checkoutProvider != nil {
+		summary.PaymentLabel = s.checkoutProvider.Label()
+		summary.TestPayment = s.testProvider != nil && s.checkoutProvider.Name() == s.testProvider.Name()
 	}
-	summary := Summary{Cart: view, ShippingOptions: []ShippingOption{}, Currency: view.Currency, PaymentLabel: s.provider.Label()}
-	for _, method := range methods {
-		option := toOption(method)
-		summary.ShippingOptions = append(summary.ShippingOptions, option)
-		if methodID != nil && method.ID == *methodID {
+	var weight int32
+	for _, line := range view.Lines {
+		if line.Available {
+			weight += line.weightGrams
+		}
+	}
+	summary.ShippingOptions, err = s.shippingOptions(ctx, q, tenantID, postalCode, weight)
+	if err != nil {
+		return Summary{}, err
+	}
+	for _, option := range summary.ShippingOptions {
+		if methodID != nil && option.ID == *methodID {
 			summary.Shipping = &option
 		}
 	}
@@ -138,15 +151,16 @@ func (s *Service) summarize(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries, 
 	return summary, err
 }
 
-// Summary prices the cart with an optional delivery choice.
-func (s *Service) Summary(ctx context.Context, ref CartRef, methodID *uuid.UUID) (Summary, error) {
+// Summary prices the cart with an optional delivery choice. Options priced by
+// postal code appear once the postal code is known.
+func (s *Service) Summary(ctx context.Context, ref CartRef, methodID *uuid.UUID, postalCode string) (Summary, error) {
 	var summary Summary
 	err := s.in(ctx, func(tx pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID) error {
 		cart, err := s.findCart(ctx, q, tenantID, ref)
 		if err != nil {
 			return err
 		}
-		summary, err = s.summarize(ctx, tx, q, tenantID, cart, methodID)
+		summary, err = s.summarize(ctx, tx, q, tenantID, cart, methodID, postalCode)
 		return err
 	})
 	return summary, err
@@ -195,6 +209,9 @@ func requestHash(ref CartRef, input CheckoutInput) ([]byte, error) {
 // record and the idempotency answer are committed in a single transaction, so a
 // failure leaves nothing behind and a repeated request returns the first order.
 func (s *Service) PlaceOrder(ctx context.Context, ref CartRef, key string, input CheckoutInput) (PlacedOrder, error) {
+	if s.checkoutProvider == nil {
+		return PlacedOrder{}, apperr.New(apperr.KindUnavailable, "PAYMENT_UNAVAILABLE", "The store cannot take payments at the moment.")
+	}
 	if !idempotencyKeyPattern.MatchString(key) {
 		return PlacedOrder{}, apperr.New(apperr.KindInvalid, "IDEMPOTENCY_KEY_REQUIRED", "Send a unique Idempotency-Key header with 16 to 100 characters.")
 	}
@@ -231,7 +248,7 @@ func (s *Service) PlaceOrder(ctx context.Context, ref CartRef, key string, input
 			}
 			return err
 		}
-		summary, err := s.summarize(ctx, tx, q, tenantID, cart, &input.ShippingMethodID)
+		summary, err := s.summarize(ctx, tx, q, tenantID, cart, &input.ShippingMethodID, input.Address.PostalCode)
 		if err != nil {
 			return err
 		}
@@ -301,7 +318,7 @@ func (s *Service) createOrder(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries
 	orderID := newID()
 	err = q.InsertOrder(ctx, sqlcgen.InsertOrderParams{
 		TenantID: tenantID, ID: orderID, Number: number, CustomerUserID: ref.UserID, CustomerName: input.CustomerName,
-		CustomerEmail: input.CustomerEmail, ShippingAddress: address, ShippingMethod: summary.Shipping.Name,
+		CustomerEmail: input.CustomerEmail, ShippingAddress: address, ShippingMethod: summary.Shipping.Name, StoreHost: input.StoreHost,
 		ShippingAmount: summary.ShippingAmount, SubtotalAmount: summary.Subtotal, TotalAmount: summary.Total,
 		Currency: summary.Currency, PaymentDueAt: s.now().Add(s.paymentTTL),
 	})
@@ -334,21 +351,43 @@ func (s *Service) createOrder(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries
 		return PlacedOrder{}, fmt.Errorf("insert history: %w", err)
 	}
 	if err := q.InsertPayment(ctx, sqlcgen.InsertPaymentParams{
-		TenantID: tenantID, ID: newID(), OrderID: orderID, Provider: s.provider.Name(), Method: "test",
+		TenantID: tenantID, ID: newID(), OrderID: orderID, Provider: s.checkoutProvider.Name(), Method: s.checkoutProvider.Name(),
 		Amount: summary.Total, Currency: summary.Currency,
 	}); err != nil {
 		return PlacedOrder{}, fmt.Errorf("insert payment: %w", err)
 	}
+	if err := recordOrderEvent(ctx, tx, tenantID, orderID, EventOrderCreated); err != nil {
+		return PlacedOrder{}, err
+	}
 	return PlacedOrder{
 		OrderNumber: number, Status: domain.PendingPayment, Total: summary.Total, Currency: summary.Currency,
-		OrderToken: s.accessToken(tenantID, orderID), PaymentLabel: s.provider.Label(), orderID: orderID,
+		OrderToken: s.accessToken(tenantID, orderID), PaymentLabel: s.checkoutProvider.Label(), orderID: orderID,
 	}, nil
 }
 
 // startCharge asks the provider to create the charge after the order is
-// committed, so a slow gateway never holds database locks (ADR-009).
+// committed, so a slow gateway never holds database locks (ADR-009). The
+// payment ID is the idempotency key, and a payment that already has a
+// reference is not charged again.
 func (s *Service) startCharge(ctx context.Context, placed PlacedOrder) {
-	reference, err := s.provider.CreateCharge(ctx, payments.Charge{OrderID: placed.orderID, Amount: placed.Total, Currency: placed.Currency})
+	var payment sqlcgen.PaymentsPayment
+	err := s.in(ctx, func(_ pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID) error {
+		var err error
+		payment, err = q.GetPaymentByOrder(ctx, sqlcgen.GetPaymentByOrderParams{TenantID: tenantID, OrderID: placed.orderID})
+		return err
+	})
+	if err == nil && payment.ProviderReference != "" {
+		return
+	}
+	var reference string
+	if err == nil {
+		provider, ok := s.providers[payment.Provider]
+		if !ok {
+			err = fmt.Errorf("payment provider %q is not configured", payment.Provider)
+		} else {
+			reference, err = provider.CreateCharge(ctx, payments.Charge{PaymentID: payment.ID, OrderID: placed.orderID, Amount: payment.Amount, Currency: payment.Currency})
+		}
+	}
 	if err == nil {
 		err = s.in(ctx, func(tx pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID) error {
 			payment, err := q.LockPaymentByOrder(ctx, sqlcgen.LockPaymentByOrderParams{TenantID: tenantID, OrderID: placed.orderID})

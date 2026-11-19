@@ -468,10 +468,22 @@ func TestOrderManagement(t *testing.T) {
 		if after != before+3 || reserved != 0 {
 			t.Errorf("stock before=%d after=%d reserved=%d", before, after, reserved)
 		}
-		detail := sh.owner.call(http.MethodGet, "/orders/"+paidID, nil)
-		payment, _ := detail.body["payment"].(map[string]any)
-		if payment["status"] != "refunded" || detail.str("cancelReason") != "Pedido do cliente" {
-			t.Errorf("detail = %v", detail.body)
+		paymentStatus := func() string {
+			detail := sh.owner.call(http.MethodGet, "/orders/"+paidID, nil)
+			if detail.str("cancelReason") != "Pedido do cliente" {
+				t.Errorf("detail = %v", detail.body)
+			}
+			payment, _ := detail.body["payment"].(map[string]any)
+			status, _ := payment["status"].(string)
+			return status
+		}
+		// The refund runs in the background, after the order is canceled.
+		if got := paymentStatus(); got != "refund_pending" {
+			t.Errorf("payment status right after canceling = %q", got)
+		}
+		sh.deliverEvents()
+		if got := paymentStatus(); got != "refunded" {
+			t.Errorf("payment status after the refund job = %q", got)
 		}
 	})
 

@@ -525,6 +525,71 @@ func (q *Queries) ListVariants(ctx context.Context, arg ListVariantsParams) ([]C
 	return items, nil
 }
 
+const searchProducts = `-- name: SearchProducts :many
+SELECT p.tenant_id, p.id, p.category_id, p.name, p.slug, p.description, p.brand, p.status, p.featured, p.seo_title, p.seo_description, p.version, p.created_at, p.updated_at
+FROM catalog.products p
+WHERE p.tenant_id = $1 AND p.status = 'active'
+  AND ($2::uuid IS NULL OR p.category_id = $2)
+  AND (catalog.product_document(p.name, p.brand, p.description) @@ catalog.search_query($3)
+       OR catalog.name_similarity($3, p.name) >= 0.5)
+ORDER BY ts_rank(catalog.product_document(p.name, p.brand, p.description), catalog.search_query($3))
+         + catalog.name_similarity($3, p.name) DESC,
+         p.id
+LIMIT $4
+`
+
+type SearchProductsParams struct {
+	TenantID   uuid.UUID
+	CategoryID *uuid.UUID
+	Query      string
+	RowLimit   int32
+}
+
+type SearchProductsRow struct {
+	CatalogProduct CatalogProduct
+}
+
+// Ranks active products by full text relevance, accepting names with small typos.
+func (q *Queries) SearchProducts(ctx context.Context, arg SearchProductsParams) ([]SearchProductsRow, error) {
+	rows, err := q.db.Query(ctx, searchProducts,
+		arg.TenantID,
+		arg.CategoryID,
+		arg.Query,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchProductsRow
+	for rows.Next() {
+		var i SearchProductsRow
+		if err := rows.Scan(
+			&i.CatalogProduct.TenantID,
+			&i.CatalogProduct.ID,
+			&i.CatalogProduct.CategoryID,
+			&i.CatalogProduct.Name,
+			&i.CatalogProduct.Slug,
+			&i.CatalogProduct.Description,
+			&i.CatalogProduct.Brand,
+			&i.CatalogProduct.Status,
+			&i.CatalogProduct.Featured,
+			&i.CatalogProduct.SeoTitle,
+			&i.CatalogProduct.SeoDescription,
+			&i.CatalogProduct.Version,
+			&i.CatalogProduct.CreatedAt,
+			&i.CatalogProduct.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateCategory = `-- name: UpdateCategory :execrows
 UPDATE catalog.categories
 SET parent_id = $3, name = $4, slug = $5, description = $6, position = $7, updated_at = now()

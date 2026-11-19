@@ -2,6 +2,7 @@ package sales
 
 import (
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/httpx"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/ratelimit"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/apperr"
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/br"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/reqctx"
 )
 
@@ -151,11 +153,12 @@ func (m *Module) RegisterStoreRoutes(router chi.Router) {
 	m.route(router, http.MethodPost, "/checkout/summary", public, func(w http.ResponseWriter, r *http.Request) error {
 		var body struct {
 			ShippingMethodID *uuid.UUID `json:"shippingMethodId"`
+			PostalCode       string     `json:"postalCode"`
 		}
 		if err := httpx.DecodeJSON(r, &body); err != nil {
 			return err
 		}
-		summary, err := m.service.Summary(r.Context(), m.cartRef(r), body.ShippingMethodID)
+		summary, err := m.service.Summary(r.Context(), m.cartRef(r), body.ShippingMethodID, br.PostalCodeDigits(body.PostalCode))
 		if err != nil {
 			return err
 		}
@@ -174,6 +177,7 @@ func (m *Module) RegisterStoreRoutes(router chi.Router) {
 		if err := httpx.DecodeJSON(r, &body); err != nil {
 			return err
 		}
+		body.StoreHost = httpx.Hostname(r.Host)
 		placed, err := m.service.PlaceOrder(r.Context(), m.cartRef(r), r.Header.Get("Idempotency-Key"), body)
 		var review *ReviewError
 		if errors.As(err, &review) {
@@ -199,7 +203,18 @@ func (m *Module) RegisterStoreRoutes(router chi.Router) {
 		}
 		return httpx.WriteJSON(w, http.StatusOK, view)
 	})
-	if m.service.testPayments {
+	m.route(router, http.MethodPost, "/webhooks/payments/{provider}", public, func(w http.ResponseWriter, r *http.Request) error {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			return apperr.Wrap(apperr.KindInvalid, "INVALID_BODY", "The request body could not be read.", err)
+		}
+		outcome, err := m.service.HandlePaymentNotification(r.Context(), chi.URLParam(r, "provider"), r.Header, body)
+		if err != nil {
+			return err
+		}
+		return httpx.WriteJSON(w, http.StatusOK, map[string]string{"outcome": outcome})
+	})
+	if m.service.testProvider != nil {
 		m.route(router, http.MethodPost, "/orders/{number}/test-payment", public, func(w http.ResponseWriter, r *http.Request) error {
 			if err := httpx.RequireSameOrigin(r); err != nil {
 				return err
@@ -285,11 +300,6 @@ func (m *Module) changeCart(w http.ResponseWriter, r *http.Request, body any, va
 	return httpx.WriteJSON(w, http.StatusOK, view)
 }
 
-type shippingView struct {
-	ShippingOption
-	Active bool `json:"active"`
-}
-
 // RegisterAdminRoutes adds order and delivery management for the store team.
 func (m *Module) RegisterAdminRoutes(router chi.Router) {
 	read, manage := authz.Permission("orders:read"), authz.Permission("orders:manage")
@@ -361,11 +371,7 @@ func (m *Module) RegisterAdminRoutes(router chi.Router) {
 		if err != nil {
 			return err
 		}
-		views := make([]shippingView, 0, len(methods))
-		for _, method := range methods {
-			views = append(views, shippingView{ShippingOption: toOption(method), Active: method.Active})
-		}
-		return httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": views})
+		return httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": methods})
 	})
 	saveShipping := func(w http.ResponseWriter, r *http.Request, id *uuid.UUID) error {
 		var body ShippingInput

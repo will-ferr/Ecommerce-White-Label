@@ -86,7 +86,7 @@ func (s *Service) ChangeStatus(ctx context.Context, principal authz.Principal, i
 			}
 			err = s.cancel(ctx, tx, q, order, reason, by)
 		} else {
-			err = s.changeStatus(ctx, q, order, change.Status, change.TrackingCode, change.Note, by)
+			err = s.changeStatus(ctx, tx, q, order, change.Status, change.TrackingCode, change.Note, by)
 		}
 		if err != nil {
 			return err
@@ -159,7 +159,8 @@ func (s *Service) ExportOrders(ctx context.Context, filter OrderFilter, out io.W
 	return writer.Error()
 }
 
-// ShippingInput configures a delivery option.
+// ShippingInput configures a delivery option. A table option takes its price
+// and delivery time from its rates.
 type ShippingInput struct {
 	Name    string `json:"name"`
 	Kind    string `json:"kind"`
@@ -167,6 +168,7 @@ type ShippingInput struct {
 	MinDays int32  `json:"minDays"`
 	MaxDays int32  `json:"maxDays"`
 	Active  bool   `json:"active"`
+	Rates   []Rate `json:"rates"`
 }
 
 func (in ShippingInput) normalize() (ShippingInput, error) {
@@ -175,30 +177,54 @@ func (in ShippingInput) normalize() (ShippingInput, error) {
 	if length := utf8.RuneCountInString(in.Name); length == 0 || length > 80 {
 		fields = append(fields, apperr.FieldError{Field: "name", Code: "invalid", Message: "Enter a name with up to 80 characters."})
 	}
-	if !slices.Contains([]string{"pickup", "flat"}, in.Kind) {
+	if !slices.Contains([]string{shippingPickup, shippingFlat, shippingTable}, in.Kind) {
 		fields = append(fields, apperr.FieldError{Field: "kind", Code: "invalid", Message: "Choose a valid kind."})
 	}
-	if in.Price < 0 || in.Price > 1_000_000_00 || (in.Kind == "pickup" && in.Price != 0) {
+	if in.Kind == shippingTable {
+		in.Price, in.MinDays, in.MaxDays = 0, 0, 0
+	}
+	if in.Price < 0 || in.Price > 1_000_000_00 || (in.Kind == shippingPickup && in.Price != 0) {
 		fields = append(fields, apperr.FieldError{Field: "price", Code: "invalid", Message: "Enter a valid price."})
 	}
 	if in.MinDays < 0 || in.MaxDays < in.MinDays || in.MaxDays > 120 {
 		fields = append(fields, apperr.FieldError{Field: "maxDays", Code: "invalid", Message: "Enter a valid delivery time."})
 	}
+	fields = append(fields, validateRates(in.Kind, in.Rates)...)
 	if len(fields) > 0 {
 		return ShippingInput{}, apperr.Validation(fields...)
 	}
 	return in, nil
 }
 
-// ShippingMethods lists every delivery option of the store.
-func (s *Service) ShippingMethods(ctx context.Context) ([]sqlcgen.ShippingMethod, error) {
-	var methods []sqlcgen.ShippingMethod
+// ShippingMethodView is a delivery option as the store team manages it.
+type ShippingMethodView struct {
+	ShippingOption
+	Active bool   `json:"active"`
+	Rates  []Rate `json:"rates"`
+}
+
+// ShippingMethods lists every delivery option of the store with its rates.
+func (s *Service) ShippingMethods(ctx context.Context) ([]ShippingMethodView, error) {
+	views := []ShippingMethodView{}
 	err := s.in(ctx, func(_ pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID) error {
-		var err error
-		methods, err = q.ListShippingMethods(ctx, sqlcgen.ListShippingMethodsParams{TenantID: tenantID})
-		return err
+		methods, err := q.ListShippingMethods(ctx, sqlcgen.ListShippingMethodsParams{TenantID: tenantID})
+		if err != nil {
+			return err
+		}
+		rates, err := loadRates(ctx, q, tenantID, methods)
+		if err != nil {
+			return err
+		}
+		for _, method := range methods {
+			view := ShippingMethodView{ShippingOption: toOption(method), Active: method.Active, Rates: rates[method.ID]}
+			if view.Rates == nil {
+				view.Rates = []Rate{}
+			}
+			views = append(views, view)
+		}
+		return nil
 	})
-	return methods, err
+	return views, err
 }
 
 // SaveShippingMethod creates a delivery option, or changes it when id is given.
@@ -230,7 +256,11 @@ func (s *Service) SaveShippingMethod(ctx context.Context, principal authz.Princi
 		if err != nil {
 			return err
 		}
-		return userAudit(ctx, tx, principal, "shipping.method.saved", "shipping_method", methodID.String(), nil)
+		if err := saveRates(ctx, q, tenantID, methodID, input.Rates); err != nil {
+			return err
+		}
+		return userAudit(ctx, tx, principal, "shipping.method.saved", "shipping_method", methodID.String(),
+			map[string]string{"kind": input.Kind, "rates": strconv.Itoa(len(input.Rates))})
 	})
 	return methodID, err
 }

@@ -5,28 +5,24 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log/slog"
 	"mime"
 	"net"
 	"net/smtp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/config"
 )
 
-const (
-	queueSize   = 256
-	workers     = 2
-	sendTimeout = 15 * time.Second
-)
+const sendTimeout = 15 * time.Second
 
-// Message is a plain text e-mail.
+// Message is a plain text e-mail. Kind names the purpose of the message, such
+// as "orders.confirmation", for metrics and support without reading it.
 type Message struct {
-	To      string
-	Subject string
-	Body    string
+	Kind    string `json:"-"`
+	To      string `json:"to"`
+	Subject string `json:"subject"`
+	Body    string `json:"body"`
 }
 
 // Sender delivers one message.
@@ -100,47 +96,4 @@ func (s *SMTPSender) Send(ctx context.Context, message Message) error {
 		return fmt.Errorf("finish smtp data: %w", err)
 	}
 	return client.Quit()
-}
-
-// Queue sends messages in the background. The response time of a request then
-// does not reveal whether an e-mail was sent, which hides if an account exists.
-type Queue struct {
-	sender Sender
-	logger *slog.Logger
-	jobs   chan Message
-	wg     sync.WaitGroup
-}
-
-// NewQueue starts the background workers.
-func NewQueue(sender Sender, logger *slog.Logger) *Queue {
-	queue := &Queue{sender: sender, logger: logger, jobs: make(chan Message, queueSize)}
-	for range workers {
-		queue.wg.Go(queue.work)
-	}
-	return queue
-}
-
-func (q *Queue) work() {
-	for message := range q.jobs {
-		ctx, cancel := context.WithTimeout(context.Background(), sendTimeout)
-		if err := q.sender.Send(ctx, message); err != nil {
-			q.logger.Error("mail.send_failed", "error", err)
-		}
-		cancel()
-	}
-}
-
-// Enqueue schedules a message. It never blocks the request.
-func (q *Queue) Enqueue(message Message) {
-	select {
-	case q.jobs <- message:
-	default:
-		q.logger.Error("mail.queue_full")
-	}
-}
-
-// Close sends the queued messages and stops the workers.
-func (q *Queue) Close() {
-	close(q.jobs)
-	q.wg.Wait()
 }

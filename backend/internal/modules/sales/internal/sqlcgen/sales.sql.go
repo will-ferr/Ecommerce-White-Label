@@ -142,6 +142,20 @@ func (q *Queries) DeleteCartItem(ctx context.Context, arg DeleteCartItemParams) 
 	return err
 }
 
+const deleteShippingRates = `-- name: DeleteShippingRates :exec
+DELETE FROM shipping.rates WHERE tenant_id = $1 AND method_id = $2
+`
+
+type DeleteShippingRatesParams struct {
+	TenantID uuid.UUID
+	MethodID uuid.UUID
+}
+
+func (q *Queries) DeleteShippingRates(ctx context.Context, arg DeleteShippingRatesParams) error {
+	_, err := q.db.Exec(ctx, deleteShippingRates, arg.TenantID, arg.MethodID)
+	return err
+}
+
 const getActiveCartByToken = `-- name: GetActiveCartByToken :one
 
 SELECT tenant_id, id, token_hash, user_id, status, created_at, updated_at FROM cart.carts WHERE tenant_id = $1 AND token_hash = $2 AND status = 'active'
@@ -215,7 +229,7 @@ func (q *Queries) GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyPa
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at FROM orders.orders WHERE tenant_id = $1 AND id = $2
+SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at, store_host FROM orders.orders WHERE tenant_id = $1 AND id = $2
 `
 
 type GetOrderParams struct {
@@ -248,12 +262,13 @@ func (q *Queries) GetOrder(ctx context.Context, arg GetOrderParams) (OrdersOrder
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StoreHost,
 	)
 	return i, err
 }
 
 const getOrderByNumber = `-- name: GetOrderByNumber :one
-SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at FROM orders.orders WHERE tenant_id = $1 AND number = $2
+SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at, store_host FROM orders.orders WHERE tenant_id = $1 AND number = $2
 `
 
 type GetOrderByNumberParams struct {
@@ -284,6 +299,35 @@ func (q *Queries) GetOrderByNumber(ctx context.Context, arg GetOrderByNumberPara
 		&i.CancelReason,
 		&i.PaymentDueAt,
 		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.StoreHost,
+	)
+	return i, err
+}
+
+const getPayment = `-- name: GetPayment :one
+SELECT tenant_id, id, order_id, provider, method, status, amount, currency, provider_reference, created_at, updated_at FROM payments.payments WHERE tenant_id = $1 AND id = $2
+`
+
+type GetPaymentParams struct {
+	TenantID uuid.UUID
+	ID       uuid.UUID
+}
+
+func (q *Queries) GetPayment(ctx context.Context, arg GetPaymentParams) (PaymentsPayment, error) {
+	row := q.db.QueryRow(ctx, getPayment, arg.TenantID, arg.ID)
+	var i PaymentsPayment
+	err := row.Scan(
+		&i.TenantID,
+		&i.ID,
+		&i.OrderID,
+		&i.Provider,
+		&i.Method,
+		&i.Status,
+		&i.Amount,
+		&i.Currency,
+		&i.ProviderReference,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -408,8 +452,8 @@ func (q *Queries) InsertCart(ctx context.Context, arg InsertCartParams) error {
 const insertOrder = `-- name: InsertOrder :exec
 INSERT INTO orders.orders (
   tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address,
-  shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, payment_due_at
-) VALUES ($1, $2, $3, 'pending_payment', $4, $5, $6, $7, $8, $9, $10, 0, 0, $11, $12, $13)
+  shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, payment_due_at, store_host
+) VALUES ($1, $2, $3, 'pending_payment', $4, $5, $6, $7, $8, $9, $10, 0, 0, $11, $12, $13, $14)
 `
 
 type InsertOrderParams struct {
@@ -426,6 +470,7 @@ type InsertOrderParams struct {
 	TotalAmount     int64
 	Currency        string
 	PaymentDueAt    time.Time
+	StoreHost       string
 }
 
 func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) error {
@@ -443,6 +488,7 @@ func (q *Queries) InsertOrder(ctx context.Context, arg InsertOrderParams) error 
 		arg.TotalAmount,
 		arg.Currency,
 		arg.PaymentDueAt,
+		arg.StoreHost,
 	)
 	return err
 }
@@ -590,6 +636,38 @@ func (q *Queries) InsertShippingMethod(ctx context.Context, arg InsertShippingMe
 	return err
 }
 
+const insertShippingRate = `-- name: InsertShippingRate :exec
+INSERT INTO shipping.rates (tenant_id, id, method_id, postal_code_start, postal_code_end, max_weight_grams, price_amount, min_days, max_days)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+`
+
+type InsertShippingRateParams struct {
+	TenantID        uuid.UUID
+	ID              uuid.UUID
+	MethodID        uuid.UUID
+	PostalCodeStart string
+	PostalCodeEnd   string
+	MaxWeightGrams  int32
+	PriceAmount     int64
+	MinDays         int32
+	MaxDays         int32
+}
+
+func (q *Queries) InsertShippingRate(ctx context.Context, arg InsertShippingRateParams) error {
+	_, err := q.db.Exec(ctx, insertShippingRate,
+		arg.TenantID,
+		arg.ID,
+		arg.MethodID,
+		arg.PostalCodeStart,
+		arg.PostalCodeEnd,
+		arg.MaxWeightGrams,
+		arg.PriceAmount,
+		arg.MinDays,
+		arg.MaxDays,
+	)
+	return err
+}
+
 const insertStatusHistory = `-- name: InsertStatusHistory :exec
 INSERT INTO orders.status_history (tenant_id, id, order_id, from_status, to_status, actor_type, actor_id, note)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -618,6 +696,38 @@ func (q *Queries) InsertStatusHistory(ctx context.Context, arg InsertStatusHisto
 		arg.Note,
 	)
 	return err
+}
+
+const insertWebhookEvent = `-- name: InsertWebhookEvent :execrows
+INSERT INTO payments.webhook_events (tenant_id, id, provider, provider_event_id, provider_reference, status, amount)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (tenant_id, provider, provider_event_id) DO NOTHING
+`
+
+type InsertWebhookEventParams struct {
+	TenantID          uuid.UUID
+	ID                uuid.UUID
+	Provider          string
+	ProviderEventID   string
+	ProviderReference string
+	Status            string
+	Amount            *int64
+}
+
+func (q *Queries) InsertWebhookEvent(ctx context.Context, arg InsertWebhookEventParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertWebhookEvent,
+		arg.TenantID,
+		arg.ID,
+		arg.Provider,
+		arg.ProviderEventID,
+		arg.ProviderReference,
+		arg.Status,
+		arg.Amount,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listAddresses = `-- name: ListAddresses :many
@@ -777,7 +887,7 @@ func (q *Queries) ListOrderNotes(ctx context.Context, arg ListOrderNotesParams) 
 }
 
 const listOrders = `-- name: ListOrders :many
-SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at
+SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at, store_host
 FROM orders.orders o
 WHERE o.tenant_id = $1
   AND ($2::text IS NULL OR o.status = $2)
@@ -840,6 +950,7 @@ func (q *Queries) ListOrders(ctx context.Context, arg ListOrdersParams) ([]Order
 			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.StoreHost,
 		); err != nil {
 			return nil, err
 		}
@@ -882,6 +993,47 @@ func (q *Queries) ListShippingMethods(ctx context.Context, arg ListShippingMetho
 			&i.MinDays,
 			&i.MaxDays,
 			&i.Active,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listShippingRates = `-- name: ListShippingRates :many
+SELECT tenant_id, id, method_id, postal_code_start, postal_code_end, max_weight_grams, price_amount, min_days, max_days FROM shipping.rates
+WHERE tenant_id = $1 AND method_id = ANY ($2::uuid[])
+ORDER BY method_id, postal_code_start, max_weight_grams
+`
+
+type ListShippingRatesParams struct {
+	TenantID  uuid.UUID
+	MethodIds []uuid.UUID
+}
+
+func (q *Queries) ListShippingRates(ctx context.Context, arg ListShippingRatesParams) ([]ShippingRate, error) {
+	rows, err := q.db.Query(ctx, listShippingRates, arg.TenantID, arg.MethodIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ShippingRate
+	for rows.Next() {
+		var i ShippingRate
+		if err := rows.Scan(
+			&i.TenantID,
+			&i.ID,
+			&i.MethodID,
+			&i.PostalCodeStart,
+			&i.PostalCodeEnd,
+			&i.MaxWeightGrams,
+			&i.PriceAmount,
+			&i.MinDays,
+			&i.MaxDays,
 		); err != nil {
 			return nil, err
 		}
@@ -957,7 +1109,7 @@ func (q *Queries) LockCart(ctx context.Context, arg LockCartParams) (CartCart, e
 }
 
 const lockOrder = `-- name: LockOrder :one
-SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at FROM orders.orders WHERE tenant_id = $1 AND id = $2 FOR UPDATE
+SELECT tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address, shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, tracking_code, cancel_reason, payment_due_at, version, created_at, updated_at, store_host FROM orders.orders WHERE tenant_id = $1 AND id = $2 FOR UPDATE
 `
 
 type LockOrderParams struct {
@@ -990,6 +1142,35 @@ func (q *Queries) LockOrder(ctx context.Context, arg LockOrderParams) (OrdersOrd
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StoreHost,
+	)
+	return i, err
+}
+
+const lockPayment = `-- name: LockPayment :one
+SELECT tenant_id, id, order_id, provider, method, status, amount, currency, provider_reference, created_at, updated_at FROM payments.payments WHERE tenant_id = $1 AND id = $2 FOR UPDATE
+`
+
+type LockPaymentParams struct {
+	TenantID uuid.UUID
+	ID       uuid.UUID
+}
+
+func (q *Queries) LockPayment(ctx context.Context, arg LockPaymentParams) (PaymentsPayment, error) {
+	row := q.db.QueryRow(ctx, lockPayment, arg.TenantID, arg.ID)
+	var i PaymentsPayment
+	err := row.Scan(
+		&i.TenantID,
+		&i.ID,
+		&i.OrderID,
+		&i.Provider,
+		&i.Method,
+		&i.Status,
+		&i.Amount,
+		&i.Currency,
+		&i.ProviderReference,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -1005,6 +1186,37 @@ type LockPaymentByOrderParams struct {
 
 func (q *Queries) LockPaymentByOrder(ctx context.Context, arg LockPaymentByOrderParams) (PaymentsPayment, error) {
 	row := q.db.QueryRow(ctx, lockPaymentByOrder, arg.TenantID, arg.OrderID)
+	var i PaymentsPayment
+	err := row.Scan(
+		&i.TenantID,
+		&i.ID,
+		&i.OrderID,
+		&i.Provider,
+		&i.Method,
+		&i.Status,
+		&i.Amount,
+		&i.Currency,
+		&i.ProviderReference,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const lockPaymentByReference = `-- name: LockPaymentByReference :one
+SELECT tenant_id, id, order_id, provider, method, status, amount, currency, provider_reference, created_at, updated_at FROM payments.payments
+WHERE tenant_id = $1 AND provider = $2 AND provider_reference = $3 AND provider_reference <> ''
+FOR UPDATE
+`
+
+type LockPaymentByReferenceParams struct {
+	TenantID          uuid.UUID
+	Provider          string
+	ProviderReference string
+}
+
+func (q *Queries) LockPaymentByReference(ctx context.Context, arg LockPaymentByReferenceParams) (PaymentsPayment, error) {
+	row := q.db.QueryRow(ctx, lockPaymentByReference, arg.TenantID, arg.Provider, arg.ProviderReference)
 	var i PaymentsPayment
 	err := row.Scan(
 		&i.TenantID,
@@ -1094,6 +1306,21 @@ type SetCartStatusParams struct {
 
 func (q *Queries) SetCartStatus(ctx context.Context, arg SetCartStatusParams) error {
 	_, err := q.db.Exec(ctx, setCartStatus, arg.TenantID, arg.ID, arg.Status)
+	return err
+}
+
+const setWebhookOutcome = `-- name: SetWebhookOutcome :exec
+UPDATE payments.webhook_events SET outcome = $3 WHERE tenant_id = $1 AND id = $2
+`
+
+type SetWebhookOutcomeParams struct {
+	TenantID uuid.UUID
+	ID       uuid.UUID
+	Outcome  string
+}
+
+func (q *Queries) SetWebhookOutcome(ctx context.Context, arg SetWebhookOutcomeParams) error {
+	_, err := q.db.Exec(ctx, setWebhookOutcome, arg.TenantID, arg.ID, arg.Outcome)
 	return err
 }
 

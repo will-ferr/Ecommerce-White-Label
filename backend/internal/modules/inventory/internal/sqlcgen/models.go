@@ -338,6 +338,38 @@ type InventoryWarehouse struct {
 	IsDefault bool
 }
 
+type MessagingInbox struct {
+	TenantID    uuid.UUID
+	Consumer    string
+	EventID     uuid.UUID
+	ProcessedAt time.Time
+}
+
+type MessagingOutbox struct {
+	TenantID    uuid.UUID
+	ID          uuid.UUID
+	Type        string
+	Source      string
+	AggregateID uuid.UUID
+	Payload     json.RawMessage
+	Traceparent string
+	CreatedAt   time.Time
+	PublishedAt *time.Time
+}
+
+type NotificationsEmail struct {
+	TenantID      uuid.UUID
+	ID            uuid.UUID
+	Kind          string
+	Sealed        []byte
+	Status        string
+	Attempts      int32
+	NextAttemptAt time.Time
+	LastError     string
+	CreatedAt     time.Time
+	SentAt        *time.Time
+}
+
 type OrdersCounter struct {
 	TenantID   uuid.UUID
 	NextNumber int64
@@ -387,6 +419,7 @@ type OrdersOrder struct {
 	Version         int32
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	StoreHost       string
 }
 
 type OrdersStatusHistory struct {
@@ -425,6 +458,18 @@ type PaymentsTransaction struct {
 	CreatedAt         time.Time
 }
 
+type PaymentsWebhookEvent struct {
+	TenantID          uuid.UUID
+	ID                uuid.UUID
+	Provider          string
+	ProviderEventID   string
+	ProviderReference string
+	Status            string
+	Amount            *int64
+	Outcome           string
+	ReceivedAt        time.Time
+}
+
 type ShippingMethod struct {
 	TenantID    uuid.UUID
 	ID          uuid.UUID
@@ -434,4 +479,16 @@ type ShippingMethod struct {
 	MinDays     int32
 	MaxDays     int32
 	Active      bool
+}
+
+type ShippingRate struct {
+	TenantID        uuid.UUID
+	ID              uuid.UUID
+	MethodID        uuid.UUID
+	PostalCodeStart string
+	PostalCodeEnd   string
+	MaxWeightGrams  int32
+	PriceAmount     int64
+	MinDays         int32
+	MaxDays         int32
 }

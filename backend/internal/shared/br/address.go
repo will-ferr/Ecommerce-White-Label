@@ -37,12 +37,10 @@ func validText(value string, minimum, maximum int) bool {
 	return length >= minimum && length <= maximum && !strings.ContainsFunc(value, unicode.IsControl)
 }
 
-// Normalize trims the fields and reports every invalid one.
-func (a Address) Normalize() (Address, error) {
-	a.Recipient, a.Street, a.Number = clean(a.Recipient), clean(a.Street), clean(a.Number)
-	a.Complement, a.District, a.City = clean(a.Complement), clean(a.District), clean(a.City)
-	a.State = strings.ToUpper(clean(a.State))
-	a.PostalCode = strings.Map(func(r rune) rune {
+// cleanPostalCode drops separators. Any other character becomes "x", which
+// makes the code invalid.
+func cleanPostalCode(value string) string {
+	return strings.Map(func(r rune) rune {
 		if r >= '0' && r <= '9' {
 			return r
 		}
@@ -50,7 +48,24 @@ func (a Address) Normalize() (Address, error) {
 			return -1
 		}
 		return 'x'
-	}, a.PostalCode)
+	}, value)
+}
+
+// PostalCodeDigits returns the 8 digits of a CEP, or "" when it is not valid.
+func PostalCodeDigits(value string) string {
+	code := cleanPostalCode(value)
+	if len(code) != 8 || strings.Contains(code, "x") {
+		return ""
+	}
+	return code
+}
+
+// Normalize trims the fields and reports every invalid one.
+func (a Address) Normalize() (Address, error) {
+	a.Recipient, a.Street, a.Number = clean(a.Recipient), clean(a.Street), clean(a.Number)
+	a.Complement, a.District, a.City = clean(a.Complement), clean(a.District), clean(a.City)
+	a.State = strings.ToUpper(clean(a.State))
+	a.PostalCode = cleanPostalCode(a.PostalCode)
 
 	var fields []apperr.FieldError
 	add := func(field, message string) {

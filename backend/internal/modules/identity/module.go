@@ -2,6 +2,7 @@
 package identity
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -20,7 +21,7 @@ import (
 
 // Mailer schedules outgoing e-mail.
 type Mailer interface {
-	Enqueue(message mail.Message)
+	Enqueue(ctx context.Context, message mail.Message)
 }
 
 // Deps lists what the module needs. A nil Limiter disables rate limiting.

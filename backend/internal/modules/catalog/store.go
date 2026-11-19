@@ -3,6 +3,9 @@ package catalog
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -113,7 +116,16 @@ func (s *Service) StoreProducts(ctx context.Context, filter StoreFilter) (pagina
 			}
 			list.CategoryID = &category.ID
 		}
-		rows, next, err := s.list(ctx, q, tenantID, list)
+		var (
+			rows []sqlcgen.CatalogProduct
+			next string
+			err  error
+		)
+		if query := strings.TrimSpace(filter.Search); query != "" {
+			rows, err = s.search(ctx, q, tenantID, query, list.CategoryID)
+		} else {
+			rows, next, err = s.list(ctx, q, tenantID, list)
+		}
 		if err != nil {
 			return err
 		}
@@ -131,6 +143,25 @@ func (s *Service) StoreProducts(ctx context.Context, filter StoreFilter) (pagina
 		return nil
 	})
 	return page, err
+}
+
+// searchLimit bounds search results. They are ranked, so later pages would
+// rarely be useful, and a refined query finds the rest.
+const searchLimit = 48
+
+func (s *Service) search(ctx context.Context, q *sqlcgen.Queries, tenantID uuid.UUID, query string, categoryID *uuid.UUID) ([]sqlcgen.CatalogProduct, error) {
+	if utf8.RuneCountInString(query) > 100 {
+		return nil, apperr.Validation(apperr.FieldError{Field: "q", Code: "too_long", Message: "Use up to 100 characters."})
+	}
+	found, err := q.SearchProducts(ctx, sqlcgen.SearchProductsParams{TenantID: tenantID, CategoryID: categoryID, Query: query, RowLimit: searchLimit})
+	if err != nil {
+		return nil, fmt.Errorf("search products: %w", err)
+	}
+	rows := make([]sqlcgen.CatalogProduct, 0, len(found))
+	for _, row := range found {
+		rows = append(rows, row.CatalogProduct)
+	}
+	return rows, nil
 }
 
 // StoreProduct returns the page of an active product.

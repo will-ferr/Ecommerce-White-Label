@@ -15,6 +15,7 @@ import (
 
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/inventory"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/sales/internal/domain"
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/sales/internal/payments"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/sales/internal/sqlcgen"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/authz"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/tenancy"
@@ -128,8 +129,8 @@ func (s *Service) detail(ctx context.Context, q *sqlcgen.Queries, order sqlcgen.
 	view := s.view(order, items)
 	payment, err := q.GetPaymentByOrder(ctx, sqlcgen.GetPaymentByOrderParams{TenantID: order.TenantID, OrderID: order.ID})
 	if err == nil {
-		view.Payment = &PaymentView{Provider: payment.Provider, Label: s.provider.Label(), Status: payment.Status, Amount: payment.Amount}
-		view.TestPayment = s.testPayments && payment.Provider == s.provider.Name() && payment.Status == "pending" && order.Status == domain.PendingPayment
+		view.Payment = &PaymentView{Provider: payment.Provider, Label: s.providerLabel(payment.Provider), Status: payment.Status, Amount: payment.Amount}
+		view.TestPayment = s.testProvider != nil && payment.Provider == s.testProvider.Name() && payment.Status == paymentPending && order.Status == domain.PendingPayment
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return OrderView{}, err
 	}
@@ -233,7 +234,7 @@ type actor struct {
 	id   string
 }
 
-func (s *Service) changeStatus(ctx context.Context, q *sqlcgen.Queries, order sqlcgen.OrdersOrder, to, tracking, reason string, by actor) error {
+func (s *Service) changeStatus(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries, order sqlcgen.OrdersOrder, to, tracking, reason string, by actor) error {
 	if tracking == "" {
 		tracking = order.TrackingCode
 	}
@@ -246,23 +247,42 @@ func (s *Service) changeStatus(ctx context.Context, q *sqlcgen.Queries, order sq
 	if note == "" && tracking != order.TrackingCode {
 		note = "Código de rastreio: " + tracking
 	}
-	return q.InsertStatusHistory(ctx, sqlcgen.InsertStatusHistoryParams{
+	if err := q.InsertStatusHistory(ctx, sqlcgen.InsertStatusHistoryParams{
 		TenantID: order.TenantID, ID: newID(), OrderID: order.ID, FromStatus: order.Status, ToStatus: to,
 		ActorType: by.kind, ActorID: by.id, Note: note,
-	})
+	}); err != nil {
+		return fmt.Errorf("insert history: %w", err)
+	}
+	if eventType, ok := statusEvents[to]; ok {
+		return recordOrderEvent(ctx, tx, order.TenantID, order.ID, eventType)
+	}
+	return nil
 }
 
 func (s *Service) setPayment(ctx context.Context, q *sqlcgen.Queries, payment sqlcgen.PaymentsPayment, status, kind string, amount int64) error {
 	if err := q.UpdatePayment(ctx, sqlcgen.UpdatePaymentParams{TenantID: payment.TenantID, ID: payment.ID, Status: status, ProviderReference: payment.ProviderReference}); err != nil {
 		return fmt.Errorf("update payment: %w", err)
 	}
+	if kind == "" {
+		return nil
+	}
 	return q.InsertPaymentTransaction(ctx, sqlcgen.InsertPaymentTransactionParams{
 		TenantID: payment.TenantID, ID: newID(), PaymentID: payment.ID, Kind: kind, Amount: amount, ProviderReference: payment.ProviderReference,
 	})
 }
 
+// requestRefund marks a captured payment for refund. The refund itself runs
+// in the background (RefundSubscription), so a slow gateway never holds the
+// order transaction.
+func (s *Service) requestRefund(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries, payment sqlcgen.PaymentsPayment) error {
+	if err := s.setPayment(ctx, q, payment, paymentRefundPending, "", 0); err != nil {
+		return err
+	}
+	return recordPaymentEvent(ctx, tx, payment.TenantID, payment.ID, payment.OrderID, EventRefundRequested)
+}
+
 // cancel ends an order and undoes its effects: held stock is released, or
-// shipped-back stock returns to the shelf and the payment is refunded.
+// paid stock returns to the shelf and the payment is refunded.
 func (s *Service) cancel(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries, order sqlcgen.OrdersOrder, reason string, by actor) error {
 	if !domain.CanTransition(order.Status, domain.Canceled) {
 		return apperr.New(apperr.KindConflict, "INVALID_STATUS_CHANGE", "This order can no longer be canceled.")
@@ -273,85 +293,80 @@ func (s *Service) cancel(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries, ord
 	}
 	reference := fmt.Sprintf("Pedido %d", order.Number)
 	if domain.NeedsRefund(order.Status) {
-		// The test provider answers immediately. Real gateways (Phase 6) will run
-		// refunds asynchronously through the outbox instead of inside this transaction.
-		if err := s.provider.Refund(ctx, payment.ProviderReference, payment.Amount); err != nil {
-			return apperr.Wrap(apperr.KindUnavailable, "REFUND_FAILED", "The refund could not be processed. Try again.", err)
-		}
-		if err := s.setPayment(ctx, q, payment, "refunded", "refund", payment.Amount); err != nil {
-			return err
+		if payment.Status == paymentCaptured {
+			if err := s.requestRefund(ctx, tx, q, payment); err != nil {
+				return err
+			}
 		}
 		if err := inventory.Restock(ctx, tx, order.TenantID, order.ID, reference); err != nil {
 			return err
 		}
 	} else {
-		if err := s.setPayment(ctx, q, payment, "canceled", "cancel", 0); err != nil {
-			return err
+		if payment.Status == paymentPending {
+			if err := s.setPayment(ctx, q, payment, paymentCanceled, "cancel", 0); err != nil {
+				return err
+			}
 		}
 		if err := inventory.Release(ctx, tx, order.TenantID, order.ID); err != nil {
 			return err
 		}
 	}
-	return s.changeStatus(ctx, q, order, domain.Canceled, "", reason, by)
+	return s.changeStatus(ctx, tx, q, order, domain.Canceled, "", reason, by)
 }
 
-// ConfirmTestPayment simulates the answer of a gateway for the test provider.
-// It is the only way an order becomes paid in this phase.
+// ConfirmTestPayment lets the buyer approve or refuse a test payment. It
+// produces the signed notification a gateway would send and delivers it to
+// the same webhook flow, so the test exercises the real confirmation path.
 func (s *Service) ConfirmTestPayment(ctx context.Context, number int64, principal *authz.Principal, token string, approved bool) (OrderView, error) {
-	if !s.testPayments {
+	if s.testProvider == nil {
 		return OrderView{}, apperr.New(apperr.KindNotFound, "ROUTE_NOT_FOUND", "The requested resource does not exist.")
 	}
-	var view OrderView
-	err := s.in(ctx, func(tx pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID) error {
-		found, err := q.GetOrderByNumber(ctx, sqlcgen.GetOrderByNumberParams{TenantID: tenantID, Number: number})
-		if errors.Is(err, pgx.ErrNoRows) || (err == nil && !s.canSee(found, principal, token)) {
+	var payment sqlcgen.PaymentsPayment
+	var orderID uuid.UUID
+	err := s.in(ctx, func(_ pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID) error {
+		order, err := q.GetOrderByNumber(ctx, sqlcgen.GetOrderByNumberParams{TenantID: tenantID, Number: number})
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && !s.canSee(order, principal, token)) {
 			return orderNotFound()
 		}
 		if err != nil {
 			return err
 		}
-		order, err := q.LockOrder(ctx, sqlcgen.LockOrderParams{TenantID: tenantID, ID: found.ID})
+		payment, err = q.GetPaymentByOrder(ctx, sqlcgen.GetPaymentByOrderParams{TenantID: tenantID, OrderID: order.ID})
 		if err != nil {
 			return err
 		}
-		payment, err := q.LockPaymentByOrder(ctx, sqlcgen.LockPaymentByOrderParams{TenantID: tenantID, OrderID: order.ID})
-		if err != nil {
-			return err
-		}
-		if order.Status != domain.PendingPayment || payment.Status != "pending" || payment.Provider != s.provider.Name() {
+		if order.Status != domain.PendingPayment || payment.Status != paymentPending || payment.Provider != s.testProvider.Name() || payment.ProviderReference == "" {
 			return apperr.New(apperr.KindConflict, "PAYMENT_NOT_PENDING", "This order is not waiting for payment.")
 		}
 		if !s.now().Before(order.PaymentDueAt) {
 			return apperr.New(apperr.KindConflict, "PAYMENT_EXPIRED", "The payment deadline has passed.")
 		}
-		system := actor{kind: "system", id: s.provider.Name()}
-		if approved {
-			if err := s.setPayment(ctx, q, payment, "captured", "capture", payment.Amount); err != nil {
-				return err
-			}
-			if err := inventory.Commit(ctx, tx, tenantID, order.ID, fmt.Sprintf("Pedido %d", order.Number)); err != nil {
-				return err
-			}
-			if err := s.changeStatus(ctx, q, order, domain.Paid, "", "Pagamento de teste aprovado", system); err != nil {
-				return err
-			}
-		} else {
-			if err := s.setPayment(ctx, q, payment, "failed", "failure", 0); err != nil {
-				return err
-			}
-			payment.Status = "failed"
-			if err := inventory.Release(ctx, tx, tenantID, order.ID); err != nil {
-				return err
-			}
-			if err := s.changeStatus(ctx, q, order, domain.Canceled, "", "Pagamento de teste recusado", system); err != nil {
-				return err
-			}
-		}
-		updated, err := q.GetOrder(ctx, sqlcgen.GetOrderParams{TenantID: tenantID, ID: order.ID})
+		orderID = order.ID
+		return nil
+	})
+	if err != nil {
+		return OrderView{}, err
+	}
+
+	status := payments.StatusFailed
+	if approved {
+		status = payments.StatusCaptured
+	}
+	header, body, err := s.testProvider.Simulate(payment.ProviderReference, status, payment.Amount)
+	if err != nil {
+		return OrderView{}, err
+	}
+	if _, err := s.HandlePaymentNotification(ctx, s.testProvider.Name(), header, body); err != nil {
+		return OrderView{}, err
+	}
+
+	var view OrderView
+	err = s.in(ctx, func(_ pgx.Tx, q *sqlcgen.Queries, tenantID uuid.UUID) error {
+		order, err := q.GetOrder(ctx, sqlcgen.GetOrderParams{TenantID: tenantID, ID: orderID})
 		if err != nil {
 			return err
 		}
-		view, err = s.detail(ctx, q, updated)
+		view, err = s.detail(ctx, q, order)
 		return err
 	})
 	return view, err

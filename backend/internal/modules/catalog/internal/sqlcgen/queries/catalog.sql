@@ -55,6 +55,19 @@ WHERE p.tenant_id = $1
 ORDER BY p.created_at DESC, p.id DESC
 LIMIT sqlc.arg('row_limit');
 
+-- name: SearchProducts :many
+-- Ranks active products by full text relevance, accepting names with small typos.
+SELECT sqlc.embed(p)
+FROM catalog.products p
+WHERE p.tenant_id = sqlc.arg('tenant_id') AND p.status = 'active'
+  AND (sqlc.narg('category_id')::uuid IS NULL OR p.category_id = sqlc.narg('category_id'))
+  AND (catalog.product_document(p.name, p.brand, p.description) @@ catalog.search_query(sqlc.arg('query'))
+       OR catalog.name_similarity(sqlc.arg('query'), p.name) >= 0.5)
+ORDER BY ts_rank(catalog.product_document(p.name, p.brand, p.description), catalog.search_query(sqlc.arg('query')))
+         + catalog.name_similarity(sqlc.arg('query'), p.name) DESC,
+         p.id
+LIMIT sqlc.arg('row_limit');
+
 -- name: ListImages :many
 SELECT product_id, url, alt
 FROM catalog.product_images

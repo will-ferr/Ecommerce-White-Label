@@ -4,6 +4,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base32"
@@ -44,7 +45,7 @@ type mailbox struct {
 	messages []mail.Message
 }
 
-func (m *mailbox) Enqueue(message mail.Message) {
+func (m *mailbox) Enqueue(_ context.Context, message mail.Message) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.messages = append(m.messages, message)

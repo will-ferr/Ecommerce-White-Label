@@ -273,8 +273,8 @@ func (s *Service) InviteMember(ctx context.Context, portal Portal, principal aut
 	if err != nil {
 		return err
 	}
-	s.mailer.Enqueue(mail.Message{
-		To: email, Subject: "Convite para a equipe",
+	s.mailer.Enqueue(ctx, mail.Message{
+		Kind: "identity.invitation", To: email, Subject: "Convite para a equipe",
 		Body: "Você foi convidado para a equipe. Crie sua senha no endereço abaixo, válido por 7 dias.\n\n" +
 			linkBase + "/convite?token=" + token,
 	})

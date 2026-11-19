@@ -168,3 +168,37 @@ func TestLoadMigrationUsesPrivilegedCredentials(t *testing.T) {
 		t.Errorf("unexpected credentials for user %q", db.User)
 	}
 }
+
+func workerEnv() map[string]string {
+	env := validEnv()
+	env["RABBITMQ_HOST"] = "rabbitmq"
+	env["RABBITMQ_USER"] = "ecommerce"
+	env["RABBITMQ_PASSWORD"] = "p@ss/word"
+	return env
+}
+
+func TestLoadWorker(t *testing.T) {
+	_, worker, err := LoadWorker(lookup(workerEnv()))
+	if err != nil {
+		t.Fatalf("LoadWorker() error = %v", err)
+	}
+	if got := worker.RabbitMQ.URL(); got != "amqp://ecommerce:p%40ss%2Fword@rabbitmq:5672/" {
+		t.Errorf("URL() = %q", got)
+	}
+	if strings.Contains(fmt.Sprintf("%+v", worker), "p@ss") {
+		t.Error("the formatted configuration reveals the broker password")
+	}
+}
+
+func TestLoadWorkerRequiresTLSInProduction(t *testing.T) {
+	env := hardenedEnv()
+	for key, value := range workerEnv() {
+		if _, ok := env[key]; !ok {
+			env[key] = value
+		}
+	}
+	_, _, err := LoadWorker(lookup(env))
+	if err == nil || !strings.Contains(err.Error(), "RABBITMQ_TLS must be true") {
+		t.Errorf("LoadWorker() error = %v, want the TLS requirement", err)
+	}
+}

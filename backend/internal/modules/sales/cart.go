@@ -39,6 +39,8 @@ type CartLine struct {
 	UnitPrice   int64     `json:"unitPrice"`
 	Total       int64     `json:"total"`
 	Available   bool      `json:"available"`
+
+	weightGrams int32
 }
 
 // CartView is the cart as shown to the buyer. Prices always come from the catalog.
@@ -125,6 +127,7 @@ func (s *Service) buildView(ctx context.Context, tx pgx.Tx, q *sqlcgen.Queries, 
 		if sellable {
 			line.ProductName, line.ProductSlug, line.Label, line.SKU = variant.ProductName, variant.ProductSlug, variant.Label, variant.SKU
 			line.UnitPrice, line.Total = variant.Price, variant.Price*int64(item.Quantity)
+			line.weightGrams = variant.WeightGrams * item.Quantity
 			line.Available = stock[item.VariantID].Available >= item.Quantity
 		} else {
 			line.ProductName = "Produto indisponível"

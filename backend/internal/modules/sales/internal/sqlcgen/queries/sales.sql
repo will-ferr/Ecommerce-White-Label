@@ -16,6 +16,18 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
 UPDATE shipping.methods SET name = $3, kind = $4, price_amount = $5, min_days = $6, max_days = $7, active = $8
 WHERE tenant_id = $1 AND id = $2;
 
+-- name: ListShippingRates :many
+SELECT * FROM shipping.rates
+WHERE tenant_id = $1 AND method_id = ANY (sqlc.arg('method_ids')::uuid[])
+ORDER BY method_id, postal_code_start, max_weight_grams;
+
+-- name: DeleteShippingRates :exec
+DELETE FROM shipping.rates WHERE tenant_id = $1 AND method_id = $2;
+
+-- name: InsertShippingRate :exec
+INSERT INTO shipping.rates (tenant_id, id, method_id, postal_code_start, postal_code_end, max_weight_grams, price_amount, min_days, max_days)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+
 -- Carts.
 
 -- name: GetActiveCartByToken :one
@@ -63,8 +75,8 @@ RETURNING next_number;
 -- name: InsertOrder :exec
 INSERT INTO orders.orders (
   tenant_id, id, number, status, customer_user_id, customer_name, customer_email, shipping_address,
-  shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, payment_due_at
-) VALUES ($1, $2, $3, 'pending_payment', $4, $5, $6, $7, $8, $9, $10, 0, 0, $11, $12, $13);
+  shipping_method, shipping_amount, subtotal_amount, discount_amount, tax_amount, total_amount, currency, payment_due_at, store_host
+) VALUES ($1, $2, $3, 'pending_payment', $4, $5, $6, $7, $8, $9, $10, 0, 0, $11, $12, $13, $14);
 
 -- name: InsertOrderItem :exec
 INSERT INTO orders.items (tenant_id, id, order_id, variant_id, product_name, variant_label, sku, quantity, unit_amount, total_amount)
@@ -122,6 +134,25 @@ VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7);
 
 -- name: GetPaymentByOrder :one
 SELECT * FROM payments.payments WHERE tenant_id = $1 AND order_id = $2;
+
+-- name: LockPayment :one
+SELECT * FROM payments.payments WHERE tenant_id = $1 AND id = $2 FOR UPDATE;
+
+-- name: GetPayment :one
+SELECT * FROM payments.payments WHERE tenant_id = $1 AND id = $2;
+
+-- name: LockPaymentByReference :one
+SELECT * FROM payments.payments
+WHERE tenant_id = $1 AND provider = $2 AND provider_reference = $3 AND provider_reference <> ''
+FOR UPDATE;
+
+-- name: InsertWebhookEvent :execrows
+INSERT INTO payments.webhook_events (tenant_id, id, provider, provider_event_id, provider_reference, status, amount)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (tenant_id, provider, provider_event_id) DO NOTHING;
+
+-- name: SetWebhookOutcome :exec
+UPDATE payments.webhook_events SET outcome = $3 WHERE tenant_id = $1 AND id = $2;
 
 -- name: LockPaymentByOrder :one
 SELECT * FROM payments.payments WHERE tenant_id = $1 AND order_id = $2 FOR UPDATE;

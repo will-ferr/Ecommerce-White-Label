@@ -62,7 +62,7 @@ var (
 
 // Mailer schedules outgoing e-mail.
 type Mailer interface {
-	Enqueue(message mail.Message)
+	Enqueue(ctx context.Context, message mail.Message)
 }
 
 // Client describes where a request came from.

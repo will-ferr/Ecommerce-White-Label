@@ -74,8 +74,8 @@ func (s *Service) Register(ctx context.Context, portal Portal, rawName, rawEmail
 		return selfAudit(ctx, tx, tenantID, userID, "identity.user.registered")
 	})
 	if isUniqueViolation(err) {
-		s.mailer.Enqueue(mail.Message{
-			To: email, Subject: "Tentativa de cadastro na sua conta",
+		s.mailer.Enqueue(ctx, mail.Message{
+			Kind: "identity.duplicate_signup", To: email, Subject: "Tentativa de cadastro na sua conta",
 			Body: "Alguém tentou criar uma conta com este e-mail, que já está cadastrado.\n\n" +
 				"Se foi você, entre na loja ou recupere sua senha em:\n" + linkBase + "/recuperar-senha\n\n" +
 				"Se não foi você, ignore esta mensagem.",
@@ -85,8 +85,8 @@ func (s *Service) Register(ctx context.Context, portal Portal, rawName, rawEmail
 	if err != nil {
 		return fmt.Errorf("register user: %w", err)
 	}
-	s.mailer.Enqueue(mail.Message{
-		To: email, Subject: "Confirme seu e-mail",
+	s.mailer.Enqueue(ctx, mail.Message{
+		Kind: "identity.email_verification", To: email, Subject: "Confirme seu e-mail",
 		Body: "Confirme seu e-mail acessando o endereço abaixo. Ele vale por 48 horas.\n\n" +
 			linkBase + "/verificar-email?token=" + token,
 	})
@@ -395,8 +395,8 @@ func (s *Service) ForgotPassword(ctx context.Context, portal Portal, rawEmail, l
 		return err
 	}
 	if token != "" {
-		s.mailer.Enqueue(mail.Message{
-			To: email, Subject: "Redefinição de senha",
+		s.mailer.Enqueue(ctx, mail.Message{
+			Kind: "identity.password_reset", To: email, Subject: "Redefinição de senha",
 			Body: "Para criar uma nova senha, acesse o endereço abaixo. Ele vale por 1 hora.\n\n" +
 				linkBase + "/redefinir-senha?token=" + token + "\n\nSe você não pediu a redefinição, ignore esta mensagem.",
 		})
