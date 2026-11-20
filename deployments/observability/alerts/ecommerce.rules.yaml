@@ -1,0 +1,144 @@
+# Alert rules of the platform. Each alert links to its runbook in docs/runbooks.
+# Thresholds are initial values, to be calibrated with production traffic.
+groups:
+  - name: api-slo
+    rules:
+      # Share of 5xx answers over several windows, for the burn rate alerts.
+      - record: api:error_ratio:rate5m
+        expr: sum(rate(http_server_request_duration_seconds_count{job=~"ecommerce-api|ecommerce-platform",http_response_status_code=~"5.."}[5m])) / sum(rate(http_server_request_duration_seconds_count{job=~"ecommerce-api|ecommerce-platform"}[5m]))
+      - record: api:error_ratio:rate30m
+        expr: sum(rate(http_server_request_duration_seconds_count{job=~"ecommerce-api|ecommerce-platform",http_response_status_code=~"5.."}[30m])) / sum(rate(http_server_request_duration_seconds_count{job=~"ecommerce-api|ecommerce-platform"}[30m]))
+      - record: api:error_ratio:rate1h
+        expr: sum(rate(http_server_request_duration_seconds_count{job=~"ecommerce-api|ecommerce-platform",http_response_status_code=~"5.."}[1h])) / sum(rate(http_server_request_duration_seconds_count{job=~"ecommerce-api|ecommerce-platform"}[1h]))
+      - record: api:error_ratio:rate6h
+        expr: sum(rate(http_server_request_duration_seconds_count{job=~"ecommerce-api|ecommerce-platform",http_response_status_code=~"5.."}[6h])) / sum(rate(http_server_request_duration_seconds_count{job=~"ecommerce-api|ecommerce-platform"}[6h]))
+
+      # SLO: 99.9% of answers without server errors. A 14.4x burn spends 2% of
+      # the monthly budget in one hour; a 6x burn spends 5% in six hours.
+      - alert: ApiErrorBudgetFastBurn
+        expr: api:error_ratio:rate1h > (14.4 * 0.001) and api:error_ratio:rate5m > (14.4 * 0.001)
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: A API está consumindo o orçamento de erros 14 vezes mais rápido que o permitido.
+          description: "Erros 5xx na última hora: {{ $value | humanizePercentage }}."
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/api-error-budget.md
+      - alert: ApiErrorBudgetSlowBurn
+        expr: api:error_ratio:rate6h > (6 * 0.001) and api:error_ratio:rate30m > (6 * 0.001)
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: A API está consumindo o orçamento de erros 6 vezes mais rápido que o permitido.
+          description: "Erros 5xx nas últimas 6 horas: {{ $value | humanizePercentage }}."
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/api-error-budget.md
+      - alert: ApiHighLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{job="ecommerce-api"}[5m]))) > 0.3 and on() sum(rate(http_server_request_duration_seconds_count{job="ecommerce-api"}[5m])) > 0.5
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: O p95 de latência da API está acima de 300 ms.
+          description: "p95 atual: {{ $value | humanizeDuration }}."
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/api-latency.md
+
+  - name: services
+    rules:
+      - alert: ServiceTelemetryMissing
+        expr: absent_over_time(go_goroutine_count{job="ecommerce-api"}[3m]) or absent_over_time(go_goroutine_count{job="ecommerce-worker"}[3m]) or absent_over_time(go_goroutine_count{job="ecommerce-platform"}[3m])
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: Um serviço parou de enviar métricas.
+          description: O serviço pode estar parado, ou a telemetria até o Prometheus foi interrompida.
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/service-down.md
+
+  - name: messaging
+    rules:
+      - alert: OutboxLagging
+        expr: max(messaging_outbox_lag_seconds) > 120
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: Há eventos esperando mais de 2 minutos para ser publicados.
+          description: "Evento mais antigo: {{ $value | humanizeDuration }}. E-mails e estornos estão atrasados."
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/outbox-lag.md
+      - alert: EventsDeadLettered
+        expr: sum by (consumer) (increase(messaging_events_consumed_total{outcome="dead"}[10m])) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: "Eventos foram para a fila de mensagens mortas de {{ $labels.consumer }}."
+          description: Cada evento morto é um e-mail ou estorno que não aconteceu. Reprocesse depois de corrigir a causa.
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/dead-letters.md
+      - alert: EventsRetryingOften
+        expr: sum by (consumer) (increase(messaging_events_consumed_total{outcome="retry"}[15m])) > 20
+        labels: { severity: warning }
+        annotations:
+          summary: "O consumidor {{ $labels.consumer }} está repetindo muitos eventos."
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/dead-letters.md
+      - alert: EmailDeliveryFailing
+        expr: sum(increase(mail_messages_total{outcome=~"retry|failed"}[15m])) > 5
+        labels: { severity: warning }
+        annotations:
+          summary: E-mails estão falhando na entrega.
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/email-delivery.md
+
+  - name: payments
+    rules:
+      - alert: PaymentAmountMismatch
+        expr: sum(increase(payments_notifications_total{outcome="amount_mismatch"}[10m])) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: Um provedor confirmou um pagamento com valor diferente do pedido.
+          description: O pedido não foi marcado como pago. Verifique o pagamento no provedor.
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/payment-notifications.md
+      - alert: PaymentNotificationsRejected
+        expr: sum(increase(payments_notifications_total{outcome="rejected"}[10m])) > 10
+        labels: { severity: warning }
+        annotations:
+          summary: Muitas notificações de pagamento com assinatura inválida.
+          description: Pode ser uma chave de webhook errada ou uma tentativa de forjar pagamentos.
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/payment-notifications.md
+
+  - name: database
+    rules:
+      - alert: DatabasePoolSaturated
+        expr: sum by (job) (pgxpool_acquired_connections) / sum by (job) (pgxpool_max_connections) > 0.85
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "O pool de conexões de {{ $labels.job }} está acima de 85%."
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/database-pool.md
+      - alert: DatabaseErrors
+        expr: sum by (job) (rate(db_client_operation_errors_total[5m])) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Consultas de {{ $labels.job }} estão falhando."
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/database-pool.md
+
+  - name: security
+    rules:
+      - alert: TenantMismatch
+        expr: sum(increase(security_events_total{event="tenant_mismatch"}[5m])) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: Um token de uma loja foi usado em outra.
+          description: Pode ser um ataque ou um defeito de isolamento. Investigue imediatamente.
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/security-events.md
+      - alert: LoginAttack
+        expr: sum(increase(security_events_total{event="login_failed"}[5m])) > 50
+        labels: { severity: warning }
+        annotations:
+          summary: Pico de logins com senha errada.
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/security-events.md
+      - alert: RefreshTokenReuse
+        expr: sum(increase(security_events_total{event="refresh_token_reuse"}[15m])) > 5
+        labels: { severity: warning }
+        annotations:
+          summary: Tokens de sessão roubados ou repetidos foram detectados.
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/security-events.md
+      - alert: RateLimitSpike
+        expr: sum(increase(security_rate_limited_total[5m])) > 200
+        labels: { severity: warning }
+        annotations:
+          summary: Muitas requisições estão sendo bloqueadas por limite de taxa.
+          runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/security-events.md

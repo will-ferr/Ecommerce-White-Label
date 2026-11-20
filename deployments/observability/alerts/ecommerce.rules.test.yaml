@@ -1,0 +1,102 @@
+# Unit tests of the alert rules: promtool test rules ecommerce.rules.test.yaml
+rule_files:
+  - ecommerce.rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - name: a burst of server errors pages immediately
+    interval: 1m
+    input_series:
+      - series: 'http_server_request_duration_seconds_count{job="ecommerce-api",http_response_status_code="200"}'
+        values: "0+600x70"
+      - series: 'http_server_request_duration_seconds_count{job="ecommerce-api",http_response_status_code="500"}'
+        values: "0+60x70"
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: ApiErrorBudgetFastBurn
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: A API está consumindo o orçamento de erros 14 vezes mais rápido que o permitido.
+              description: "Erros 5xx na última hora: 9.091%."
+              runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/api-error-budget.md
+
+  - name: an error rate within the budget does not page
+    interval: 1m
+    input_series:
+      - series: 'http_server_request_duration_seconds_count{job="ecommerce-api",http_response_status_code="200"}'
+        values: "0+10000x70"
+      - series: 'http_server_request_duration_seconds_count{job="ecommerce-api",http_response_status_code="500"}'
+        values: "0+1x70"
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: ApiErrorBudgetFastBurn
+        exp_alerts: []
+
+  - name: a dead letter alerts its consumer
+    interval: 1m
+    input_series:
+      - series: 'messaging_events_consumed_total{consumer="sales-notifications",outcome="dead",event_type="orders.order.paid.v1"}'
+        values: "0 0 0 1 1 1"
+      - series: 'messaging_events_consumed_total{consumer="sales-refunds",outcome="handled",event_type="payments.refund.requested.v1"}'
+        values: "0 1 2 3 4 5"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: EventsDeadLettered
+        exp_alerts:
+          - exp_labels: { severity: critical, consumer: sales-notifications }
+            exp_annotations:
+              summary: Eventos foram para a fila de mensagens mortas de sales-notifications.
+              description: Cada evento morto é um e-mail ou estorno que não aconteceu. Reprocesse depois de corrigir a causa.
+              runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/dead-letters.md
+
+  - name: the outbox alerts only after lagging for two minutes
+    interval: 1m
+    input_series:
+      - series: 'messaging_outbox_lag_seconds{job="ecommerce-worker"}'
+        values: "0 200 200 200 200"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: OutboxLagging
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: OutboxLagging
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: Há eventos esperando mais de 2 minutos para ser publicados.
+              description: "Evento mais antigo: 3m 20s. E-mails e estornos estão atrasados."
+              runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/outbox-lag.md
+
+  - name: a token used across stores pages immediately
+    interval: 1m
+    input_series:
+      - series: 'security_events_total{event="tenant_mismatch"}'
+        values: "0 0 1"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: TenantMismatch
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: Um token de uma loja foi usado em outra.
+              description: Pode ser um ataque ou um defeito de isolamento. Investigue imediatamente.
+              runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/security-events.md
+
+  - name: a silent service is reported
+    interval: 1m
+    input_series:
+      - series: 'go_goroutine_count{job="ecommerce-api"}'
+        values: "10x10"
+      - series: 'go_goroutine_count{job="ecommerce-platform"}'
+        values: "10x10"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: ServiceTelemetryMissing
+        exp_alerts:
+          - exp_labels: { severity: critical, job: ecommerce-worker }
+            exp_annotations:
+              summary: Um serviço parou de enviar métricas.
+              description: O serviço pode estar parado, ou a telemetria até o Prometheus foi interrompida.
+              runbook_url: https://github.com/will-ferr/Ecommerce-White-Label/blob/main/docs/runbooks/service-down.md

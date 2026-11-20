@@ -1,0 +1,29 @@
+# Local delivery of alerts: every notification arrives in Mailpit.
+# Production replaces the receiver with the on-call channel (Phase 9).
+global:
+  smtp_smarthost: mailpit:1025
+  smtp_from: alertas@plataforma.localhost
+  smtp_require_tls: false
+
+route:
+  receiver: operations
+  group_by: [alertname, severity]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="critical"]
+      receiver: operations
+      group_wait: 10s
+      repeat_interval: 1h
+
+receivers:
+  - name: operations
+    email_configs:
+      - to: plantao@plataforma.localhost
+        send_resolved: true
+
+inhibit_rules:
+  # A silent service explains every other alert about it.
+  - source_matchers: [alertname="ServiceTelemetryMissing"]
+    target_matchers: [severity="warning"]
