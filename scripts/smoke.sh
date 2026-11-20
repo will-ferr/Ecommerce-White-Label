@@ -95,6 +95,14 @@ expect "robots.txt bloqueia loja não indexável" "Disallow: /" "$(curl -s -H 'H
 expect "sitemap.xml é XML" "<urlset" "$(curl -s -H 'Host: aurora.localhost' "$BASE_URL/sitemap.xml")"
 if docker compose exec -T platform /app/platform -healthcheck >/dev/null 2>&1; then pass "API da plataforma está saudável"; else fail "API da plataforma está saudável"; fi
 
+marker="smoke-$(date +%s)-segredo"
+curl -s -o /dev/null -H 'Host: aurora.localhost' -H "Referer: http://aurora.localhost/pedido/1?token=$marker" "$BASE_URL/verificar-email?token=$marker"
+curl -s -o /dev/null -H 'Host: admin.localhost' "$BASE_URL/convite?token=$marker"
+sleep 1
+if docker compose logs --since 2m edge admin storefront 2>/dev/null | grep -q "$marker"; then fail "tokens de links não aparecem nos logs"; else pass "tokens de links não aparecem nos logs"; fi
+expect "loja aplica CSP com nonce" "script-src 'self' 'nonce-" "$(curl -s -D - -o /dev/null -H 'Host: aurora.localhost' "$BASE_URL/")"
+if curl -s -D - -o /dev/null -H 'Host: aurora.localhost' "$BASE_URL/" | grep -qi '^x-powered-by'; then fail "loja não revela a tecnologia"; else pass "loja não revela a tecnologia"; fi
+
 if docker compose exec -T worker /app/worker -healthcheck >/dev/null 2>&1; then pass "worker está saudável"; else fail "worker está saudável"; fi
 queues="$(docker compose exec -T rabbitmq rabbitmqctl list_queues --quiet name 2>/dev/null)"
 expect "fila de notificações existe" "sales-notifications" "$queues"

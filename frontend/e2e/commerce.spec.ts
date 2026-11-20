@@ -33,7 +33,7 @@ test('a visitor buys a product and the store ships the order', async ({ page, br
   await expect(page.getByTestId('cart-count')).toContainText('1')
 
   await page.getByRole('link', { name: 'Ver carrinho' }).click()
-  await expect(page.getByText('Café Especial Torra Média')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Café Especial Torra Média' })).toBeVisible()
   await page.getByRole('button', { name: 'Finalizar compra' }).click()
 
   const buyerEmail = `ana-${Date.now()}@exemplo.test`

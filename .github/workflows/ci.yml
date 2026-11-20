@@ -81,6 +81,10 @@ jobs:
           npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
           npm run test:e2e
+      - name: Security scan (OWASP ZAP, fails on high risk)
+        run: bash scripts/security-scan.sh
+      - name: Restore drill
+        run: bash scripts/backup-restore-test.sh
       - name: Scan application images
         run: |
           for image in api storefront admin console; do
@@ -93,6 +97,26 @@ jobs:
       - name: Stop the environment
         if: always()
         run: docker compose down -v
+
+  observability:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: deployments/observability
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Alert rules are valid and pass their tests
+        run: |
+          docker run --rm -v "$PWD/alerts:/rules" -w /rules --entrypoint promtool prom/prometheus:v3.16.0 check rules ecommerce.rules.yaml
+          docker run --rm -v "$PWD/alerts:/rules" -w /rules --entrypoint promtool prom/prometheus:v3.16.0 test rules ecommerce.rules.test.yaml
+      - name: Prometheus and Alertmanager configurations are valid
+        run: |
+          docker run --rm -v "$PWD:/config" --entrypoint promtool prom/prometheus:v3.16.0 check config /config/prometheus.yaml --syntax-only
+          docker run --rm -v "$PWD:/config" --entrypoint amtool prom/alertmanager:v0.28.1 check-config /config/alertmanager.yaml
+      - name: Every alert has a runbook and dashboards are valid JSON
+        run: |
+          for book in $(grep -o 'runbooks/[a-z-]*\.md' alerts/ecommerce.rules.yaml | sort -u); do test -f "../../docs/$book" || { echo "missing $book"; exit 1; }; done
+          for file in grafana/dashboards/*.json; do python3 -m json.tool "$file" > /dev/null; done
 
   secrets:
     runs-on: ubuntu-24.04
