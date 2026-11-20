@@ -26,5 +26,6 @@ USER root
 RUN apk upgrade --no-cache
 USER 101
 COPY panel.nginx.conf /etc/nginx/conf.d/default.conf
+COPY panel.security.conf /etc/nginx/snippets/security.conf
 COPY --from=panel-build /panel /usr/share/nginx/html
 EXPOSE 8080
