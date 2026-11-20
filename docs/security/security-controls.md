@@ -45,6 +45,22 @@ Cabeçalhos padrão: `Strict-Transport-Security`, `Content-Security-Policy`, `X-
 
 CORS é fechado por padrão. O storefront usa a mesma origem da API, e os painéis têm uma lista explícita de origens.
 
+### Varredura dinâmica (Fase 8)
+
+O OWASP ZAP roda no CI (`scripts/security-scan.sh`) contra o ambiente completo: varredura passiva da loja, do admin e do console, e varredura ativa da API a partir do contrato OpenAPI, com ataques de injeção e XSS. O CI falha com qualquer achado de risco alto.
+
+Na última execução, não houve achados de risco alto. Os achados de risco médio ficaram assim:
+
+| Achado | Situação |
+| --- | --- |
+| Loja sem CSP e sem proteção contra clickjacking | Corrigido: CSP com nonce por resposta, `frame-ancestors 'none'` e `X-Frame-Options` |
+| `X-Powered-By` revelando a tecnologia | Corrigido: cabeçalho removido |
+| CSP sem `form-action` e `base-uri` na API | Corrigido |
+| Tokens de links (`?token=`) gravados nos logs de acesso, via URL e Referer | Corrigido: o nginx registra o caminho sem a query string e sem o Referer. O smoke verifica |
+| `img-src https:` (curinga) | Aceito: imagens de produtos e logotipos podem estar em qualquer host HTTPS até existir o upload próprio de mídia |
+| `style-src 'unsafe-inline'` na loja | Aceito: cada tema é aplicado por variáveis CSS em estilos inline; scripts continuam restritos por nonce |
+| `Cross-Origin-Embedder-Policy` ausente (risco baixo) | Aceito: bloquearia imagens hospedadas em outros domínios |
+
 ## 4. Dados e criptografia
 
 | Dado | Tratamento |

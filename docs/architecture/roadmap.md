@@ -23,7 +23,7 @@ flowchart LR
 | **5. Núcleo comercial** | Produtos, categorias, estoque, preços, clientes, carrinho, checkout, pedidos e loja navegável | Concluída (ADR-017). Gateways, transportadoras, impostos, listas de preço e busca avançada ficam para as Fases 6 e 7 |
 | **6. Integrações** | RabbitMQ e Outbox em produção interna, um gateway real em sandbox, webhooks, frete, e-mail, busca | Concluída, exceto o sandbox real (ADR-018): webhook duplicado sem efeito duplo e DLQ testados com RabbitMQ real. A validação no sandbox depende da escolha do gateway |
 | **7. Administração** | Console da plataforma, admin da loja, promoções, CMS, SEO, relatórios, LGPD | Concluída (ADR-019): loja criada no console e operada pela equipe sem acesso ao banco, com testes E2E e de acessibilidade |
-| **8. Observabilidade e segurança avançada** | Dashboards, alertas, runbooks, ZAP, k6, teste de restauração | Capacidade medida e documentada; achados altos de segurança resolvidos |
+| **8. Observabilidade e segurança avançada** | Dashboards, alertas, runbooks, ZAP, k6, teste de restauração | Concluída (ADR-020): [capacidade medida](../observability/capacity.md), alertas com testes e runbooks, ZAP sem achados altos no CI, restauração ensaiada no CI |
 | **9. Produção** | CI/CD completo, Kubernetes, backups, disaster recovery, resposta a incidentes, revisão de segurança | Deploy e rollback ensaiados; restauração medida; pentest externo concluído |
 
 ## Pendências registradas
@@ -33,6 +33,8 @@ flowchart LR
 | Validar um gateway de pagamento real em sandbox | Critério de saída da Fase 6 | Escolha do provedor e credenciais de sandbox |
 | Cotação de frete com transportadora | Fase 6 | Escolha do provedor |
 | Política de retenção configurável por tipo de dado | LGPD, Fase 7 | Definição jurídica dos prazos |
+| Pool de conexões dimensionado por réplica, com PgBouncer | Gargalo medido na Fase 8 | Infraestrutura de produção |
+| Backups com recuperação a um ponto no tempo (RPO de 5 min) | Fase 8 | Infraestrutura de produção |
 
 ## Documentos que ainda serão criados
 

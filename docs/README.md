@@ -1,6 +1,6 @@
 # Documentação da plataforma
 
-Fase atual: **7, Administração**. A validação de um gateway real em sandbox segue pendente da escolha do provedor (veja o [roadmap](architecture/roadmap.md#pendências-registradas)). Para executar o projeto, veja [Primeiros passos](development/getting-started.md). O contrato da API está em [openapi.yaml](api/openapi.yaml).
+Fase atual: **8, Observabilidade e segurança avançada**. A validação de um gateway real em sandbox segue pendente da escolha do provedor (veja o [roadmap](architecture/roadmap.md#pendências-registradas)). Para executar o projeto, veja [Primeiros passos](development/getting-started.md). O contrato da API está em [openapi.yaml](api/openapi.yaml).
 
 ## Entregas da Fase 1
 

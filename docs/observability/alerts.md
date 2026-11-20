@@ -34,6 +34,31 @@ Alertas indicam impacto ao usuário ou risco iminente, e cada um terá um runboo
 
 Os alertas de consumo de orçamento seguem o método de múltiplas janelas, que reduz alarmes falsos e detecta tanto falhas rápidas quanto degradações lentas.
 
-Métricas já emitidas para estes alertas: `messaging_outbox_lag_seconds`, `messaging_events_consumed_total` (por consumidor e resultado, incluindo `dead`) e `mail_messages_total` (por tipo e resultado). As regras do Prometheus entram na Fase 8.
+## Implementado na Fase 8
+
+As regras estão em `deployments/observability/alerts/ecommerce.rules.yaml` e têm testes em `ecommerce.rules.test.yaml`, executados pelo CI com `promtool test rules`. Cada alerta aponta para um [runbook](../runbooks/README.md).
+
+No ambiente local, o Alertmanager entrega as notificações no Mailpit (<http://localhost:8025>), para `plantao@plataforma.localhost`. Alertas críticos são agrupados em 10 segundos e repetidos a cada hora; avisos, a cada 4 horas.
+
+| Alerta | Condição implementada | Severidade |
+| --- | --- | --- |
+| `ApiErrorBudgetFastBurn` | Erros 5xx acima de 14,4 × 0,1% em 1 h e em 5 min, por 2 min | critical |
+| `ApiErrorBudgetSlowBurn` | Erros 5xx acima de 6 × 0,1% em 6 h e em 30 min, por 15 min | warning |
+| `ApiHighLatency` | p95 acima de 300 ms por 10 min, com tráfego | warning |
+| `ServiceTelemetryMissing` | API, worker ou plataforma sem métricas por 3 min | critical |
+| `OutboxLagging` | Evento mais antigo sem publicar há mais de 2 min | critical |
+| `EventsDeadLettered` | Qualquer evento novo na DLQ em 10 min | critical |
+| `EventsRetryingOften` | Mais de 20 novas tentativas por consumidor em 15 min | warning |
+| `EmailDeliveryFailing` | Mais de 5 falhas de envio em 15 min | warning |
+| `PaymentAmountMismatch` | Qualquer pagamento confirmado com valor diferente | critical |
+| `PaymentNotificationsRejected` | Mais de 10 notificações com assinatura inválida em 10 min | warning |
+| `DatabasePoolSaturated` | Pool acima de 85% por 5 min | critical |
+| `DatabaseErrors` | Mais de 1 erro de consulta por segundo por 5 min | warning |
+| `TenantMismatch` | Qualquer token de uma loja usado em outra | critical |
+| `LoginAttack` | Mais de 50 logins com senha errada em 5 min | warning |
+| `RefreshTokenReuse` | Mais de 5 reusos de token de sessão em 15 min | warning |
+| `RateLimitSpike` | Mais de 200 requisições bloqueadas em 5 min | warning |
+
+Os alertas de replicação, certificado, backup, queda de pedidos e pedidos parados dependem da infraestrutura de produção e entram na Fase 9.
 
 Alertas não incluem dados pessoais e trazem links para o dashboard e para o runbook correspondente.

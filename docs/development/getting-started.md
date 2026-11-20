@@ -54,6 +54,17 @@ As filas podem ser vistas no painel do RabbitMQ. Para reprocessar mensagens mort
 
 Cada loja publica `/robots.txt` e `/sitemap.xml`. Enquanto a opção "Permitir que buscadores indexem a loja" estiver desligada no admin (padrão), o robots.txt bloqueia tudo e o sitemap fica vazio.
 
+## Operação
+
+| Recurso | Endereço ou comando |
+| --- | --- |
+| Dashboards (pasta **E-commerce**) | <http://localhost:3000> |
+| Alertas ativos | <http://localhost:9093> (Alertmanager); notificações chegam no Mailpit, para `plantao@plataforma.localhost` |
+| Runbooks | [docs/runbooks](../runbooks/README.md) |
+| Teste de carga | `bash scripts/load-test.sh 150 3` ([capacidade medida](../observability/capacity.md)) |
+| Varredura de segurança | `bash scripts/security-scan.sh` (OWASP ZAP; relatórios em `security-reports/`) |
+| Ensaio de restauração | `bash scripts/backup-restore-test.sh` |
+
 ## Verificar o ambiente
 
 ```bash

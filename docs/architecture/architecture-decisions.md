@@ -234,3 +234,24 @@ Cada decisão registra contexto, escolha, consequências e alternativas. Uma dec
 
 - Dar `app_platform` à API principal: mais simples, mas qualquer falha na loja pública alcançaria dados de todas as lojas.
 - Expor as operações por funções `SECURITY DEFINER` ao papel da API: dezenas de funções a manter, com o mesmo poder concentrado no mesmo processo.
+
+## ADR-020: Observabilidade operável, varredura contínua e limites medidos
+
+**Contexto.** A Fase 8 exige capacidade medida e documentada e nenhum achado alto de segurança em aberto. Até aqui havia métricas, logs e traces, mas nenhum alerta, dashboard ou medição.
+
+**Decisão.**
+
+- **Dashboards.** São gerados como código e provisionados no Grafana, na pasta **E-commerce**, sem edição pela interface: API (método RED e SLO), negócio e mensageria, banco e processos, e segurança.
+- **Alertas.** As regras do Prometheus seguem o SLO de 99,9% com alertas de consumo de orçamento em múltiplas janelas. Elas têm testes de unidade com `promtool` e apontam cada uma para um runbook. Localmente, o Alertmanager entrega no Mailpit.
+- **Métricas de domínio.** Entram com rótulos de baixa cardinalidade: resultado do checkout, das notificações de pagamento e dos acessos, e eventos de segurança. Nunca usam ID de loja, e-mail ou host.
+- **Varredura de segurança.** O OWASP ZAP roda no CI contra o ambiente completo: varredura passiva da loja e dos painéis, e varredura ativa da API a partir do contrato OpenAPI. O CI falha com qualquer achado de risco alto.
+- **Cabeçalhos da loja.** A loja recebe CSP com nonce por resposta, porque é renderizada no servidor com scripts inline. Estilos inline continuam permitidos, porque cada tema é aplicado por variáveis CSS.
+- **Logs sem tokens.** Os logs de acesso do nginx omitem query string e Referer. Links de verificação, convite, redefinição de senha e acesso a pedidos levam tokens na URL.
+- **Teste de carga.** Usa k6 com um IP por visitante, na faixa reservada a testes de desempenho (RFC 2544), e carga distribuída entre lojas. Assim os limites por IP e por loja ficam ligados e se comportam como em produção.
+
+**Consequências.**
+
+- A capacidade documentada vale para o ambiente local medido, não para produção. Ela serve de linha de base para o dimensionamento da Fase 9.
+- A política `Cross-Origin-Embedder-Policy` não é aplicada, porque bloquearia imagens de produtos hospedadas em outros domínios. O ZAP a relata como risco baixo, aceito.
+
+**Alternativas.** Dashboards editados à mão no Grafana: divergem entre ambientes e se perdem ao recriar o volume. CSP com `unsafe-inline` para scripts: anularia a proteção contra XSS.
