@@ -96,7 +96,7 @@ func TestSecurityHeaders(t *testing.T) {
 	for header, want := range map[string]string{
 		"X-Content-Type-Options":  "nosniff",
 		"X-Frame-Options":         "DENY",
-		"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+		"Content-Security-Policy": "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
 		"Cache-Control":           "no-store",
 	} {
 		if got := rec.Header().Get(header); got != want {

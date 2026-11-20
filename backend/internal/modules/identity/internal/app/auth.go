@@ -12,6 +12,7 @@ import (
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/identity/internal/sqlcgen"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/authz"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/mail"
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/observability"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/security"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/tenancy"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/apperr"
@@ -256,6 +257,7 @@ func (s *Service) Refresh(ctx context.Context, portal Portal, token string, clie
 				return fmt.Errorf("revoke session: %w", err)
 			}
 			s.logger.WarnContext(ctx, "security.refresh_token_reuse", "session_id", row.SessionID)
+			observability.SecurityEvent(ctx, "refresh_token_reuse")
 			outcome = sessionExpired()
 			return selfAudit(ctx, tx, tenantID, row.UserID, "identity.session.reuse_detected")
 		}
@@ -325,6 +327,7 @@ func (s *Service) Authenticate(ctx context.Context, portal Portal, raw string) (
 	}
 	if current, bound := tenancy.FromContext(ctx); bound && current != claims.TenantID {
 		s.logger.WarnContext(ctx, "security.tenant_mismatch", "portal", portal.Name)
+		observability.SecurityEvent(ctx, "tenant_mismatch")
 		return authz.Principal{}, sessionExpired()
 	}
 

@@ -141,7 +141,7 @@ func SecurityHeaders(hsts bool) func(http.Handler) http.Handler {
 			h.Set("X-Content-Type-Options", "nosniff")
 			h.Set("X-Frame-Options", "DENY")
 			h.Set("Referrer-Policy", "no-referrer")
-			h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+			h.Set("Content-Security-Policy", "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 			h.Set("Cross-Origin-Resource-Policy", "same-origin")
 			h.Set("Cache-Control", "no-store")
 			if hsts {

@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/sales/internal/domain"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/sales/internal/payments"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/sales/internal/sqlcgen"
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/observability"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/security"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/apperr"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/br"
@@ -323,8 +326,13 @@ func (s *Service) PlaceOrder(ctx context.Context, ref CartRef, key string, input
 		})
 	})
 	if err != nil {
+		var review *ReviewError
+		if errors.As(err, &review) {
+			observability.Count(ctx, "orders.checkout", attribute.String("outcome", strings.ToLower(review.Code)))
+		}
 		return PlacedOrder{}, err
 	}
+	observability.Count(ctx, "orders.checkout", attribute.String("outcome", "placed"))
 	s.startCharge(ctx, placed)
 	return placed, nil
 }

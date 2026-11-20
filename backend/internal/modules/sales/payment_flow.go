@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/sales/internal/payments"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/modules/sales/internal/sqlcgen"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/messaging"
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/observability"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/apperr"
 )
 
@@ -50,6 +53,8 @@ func (s *Service) HandlePaymentNotification(ctx context.Context, providerName st
 	notification, err := provider.ParseNotification(header, body)
 	if err != nil {
 		s.logger.WarnContext(ctx, "payments.notification_rejected", "provider", providerName, "error", err)
+		observability.SecurityEvent(ctx, "webhook_rejected")
+		observability.Count(ctx, "payments.notifications", attribute.String("provider", providerName), attribute.String("outcome", "rejected"))
 		return "", apperr.New(apperr.KindUnauthenticated, "WEBHOOK_SIGNATURE_INVALID", "The notification could not be authenticated.")
 	}
 
@@ -77,6 +82,7 @@ func (s *Service) HandlePaymentNotification(ctx context.Context, providerName st
 		return "", err
 	}
 	s.logger.InfoContext(ctx, "payments.notification_applied", "provider", providerName, "status", notification.Status, "outcome", outcome)
+	observability.Count(ctx, "payments.notifications", attribute.String("provider", providerName), attribute.String("outcome", outcome))
 	return outcome, nil
 }
 

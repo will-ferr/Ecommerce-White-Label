@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -22,6 +24,7 @@ import (
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/config"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/database"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/mail"
+	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/observability"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/security"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/platform/tenancy"
 	"github.com/will-ferr/Ecommerce-White-Label/backend/internal/shared/apperr"
@@ -190,6 +193,10 @@ func (s *Service) LinkBase(portal Portal, host string) string {
 }
 
 func (s *Service) recordEvent(ctx context.Context, portal Portal, userID *uuid.UUID, event string, client Client) {
+	observability.Count(ctx, "identity.access_events", attribute.String("portal", portal.Name), attribute.String("event", event))
+	if event == "login_failed" {
+		observability.SecurityEvent(ctx, "login_failed")
+	}
 	tenantID, err := tenantOf(ctx)
 	if err != nil {
 		return
